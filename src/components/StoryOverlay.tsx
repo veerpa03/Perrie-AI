@@ -9,6 +9,9 @@ import { useDemoModal } from "./DemoModal";
 interface Props {
   progressRef: React.MutableRefObject<number>;
   variant?: "desktop" | "mobile";
+  // While false (during the opening fly-in) all chapter text is hidden and
+  // removed from the tab order; it reveals once the intro completes.
+  enabled?: boolean;
 }
 
 /**
@@ -36,7 +39,7 @@ function chapterOpacity(p: number, from: number, to: number): number {
   return Math.max(0, Math.min(1, o));
 }
 
-export default function StoryOverlay({ progressRef, variant = "desktop" }: Props) {
+export default function StoryOverlay({ progressRef, variant = "desktop", enabled = true }: Props) {
   const { open } = useDemoModal();
   const blockRefs = useRef<(HTMLElement | null)[]>([]);
   const dotRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -44,10 +47,27 @@ export default function StoryOverlay({ progressRef, variant = "desktop" }: Props
   const barRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number | null>(null);
   const activeRef = useRef<number>(-1);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   useEffect(() => {
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
+
+      // During the fly-in, keep every chapter hidden and non-interactive.
+      if (!enabledRef.current) {
+        for (const el of blockRefs.current) {
+          if (!el) continue;
+          el.style.opacity = "0";
+          el.style.pointerEvents = "none";
+          el.setAttribute("aria-hidden", "true");
+          el.inert = true;
+        }
+        if (fillRef.current) fillRef.current.style.height = "0%";
+        if (barRef.current) barRef.current.style.transform = "scaleX(0)";
+        return;
+      }
+
       const p = progressRef.current;
 
       let active = 0;

@@ -4,45 +4,41 @@ import { useEffect, useRef } from "react";
 import { FrameCache, loadManifest } from "@/lib/frameCache";
 import { frameIndexFor } from "@/lib/journeyController";
 import type { SequenceManifest } from "@/lib/types";
-import {
-  chapterAt,
-  JOURNEY_FOCAL,
-  PRIMARY_SEQUENCE,
-  type Ambience,
-} from "@/lib/constants";
+import { JOURNEY_FOCAL, PRIMARY_SEQUENCE } from "@/lib/constants";
 
 type Focal = { x: number; y: number };
 
 interface Props {
+  // Normalized FRAME progress (0..1 over the whole sequence) — drives which
+  // frame is drawn. The fly-in and the scroll both feed this ref.
   progressRef: React.MutableRefObject<number>;
-  onStageChange?: (ambience: Ambience, speed: number) => void;
   tier: "lg" | "sm";
   className?: string;
-  // Cover-fit focal point. A function receives normalized progress so the crop
-  // can follow Perrie across frame on narrow screens; defaults to the static
-  // desktop focal.
+  // Cover-fit focal point. A function receives the current frame progress so
+  // the crop can follow Perrie across frame on narrow screens; defaults to the
+  // static desktop focal.
   focal?: Focal | ((progress: number) => Focal);
+  // How many leading frames to eagerly prewarm so the opening fly-in is smooth.
+  prewarm?: number;
 }
 
 /**
- * Fullscreen Canvas 2D renderer for the flight sequence. The footage fills
- * the entire element edge-to-edge using a COVER fit (scale to fill, crop the
- * overflow) with a left-biased focal point so Perrie — who lives on the
- * left/centre of frame — is protected from the crop on off-ratio viewports.
- * There is no card, border, letterbox, or player chrome: the canvas is the
- * scene.
+ * Fullscreen Canvas 2D renderer for the flight sequence. The footage fills the
+ * entire element edge-to-edge using a COVER fit (scale to fill, crop the
+ * overflow) with a focal point so Perrie is protected from the crop on
+ * off-ratio viewports. No card, border, letterbox, or player chrome — the
+ * canvas is the scene.
  *
- * Driven imperatively from a progress ref (0..1) rather than React state so
- * scroll updates never trigger a re-render. A single rAF loop reads the ref,
- * resolves the frame index, and draws. We scrub a single sequence (descent)
- * forwards and backwards for perfectly continuous reversible motion.
+ * Driven imperatively from a frame-progress ref (0..1) via a single rAF loop;
+ * scroll/intro updates never trigger a re-render. A single sequence (descent)
+ * is scrubbed forwards and backwards for perfectly continuous motion.
  */
 export default function JourneyCanvas({
   progressRef,
-  onStageChange,
   tier,
   className,
   focal = JOURNEY_FOCAL,
+  prewarm = 0,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -50,7 +46,6 @@ export default function JourneyCanvas({
   const cacheRef = useRef<FrameCache | null>(null);
   const manifestRef = useRef<SequenceManifest | null>(null);
   const lastDrawnRef = useRef<HTMLImageElement | null>(null);
-  const lastProgressForSpeedRef = useRef(0);
   const dprRef = useRef(1);
   const focalRef = useRef<Focal>(typeof focal === "function" ? focal(0) : focal);
   const focalFnRef = useRef(focal);
@@ -63,7 +58,12 @@ export default function JourneyCanvas({
       const manifest = await loadManifest(PRIMARY_SEQUENCE);
       if (cancelled) return;
       manifestRef.current = manifest;
-      cacheRef.current = new FrameCache(manifest, tier);
+      const cache = new FrameCache(manifest, tier);
+      cacheRef.current = cache;
+
+      // Prewarm leading frames so the fly-in doesn't stutter waiting on decodes.
+      const warm = Math.min(manifest.count, Math.max(0, prewarm));
+      for (let i = 0; i < warm; i++) void cache.request(i);
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -89,13 +89,11 @@ export default function JourneyCanvas({
         const iw = img.width;
         const ih = img.height;
         if (iw === 0 || ih === 0) return;
-        // COVER fit: scale to fill, anchor on the focal point, crop overflow.
         const scale = Math.max(cw / iw, ch / ih);
         const dw = iw * scale;
         const dh = ih * scale;
         const dx = (cw - dw) * focalRef.current.x;
         const dy = (ch - dh) * focalRef.current.y;
-        // Fill sky first so any sub-pixel seam reads as sky, never black.
         ctx.fillStyle = "#EAF3FA";
         ctx.fillRect(0, 0, cw, ch);
         ctx.drawImage(img, dx, dy, dw, dh);
@@ -106,9 +104,8 @@ export default function JourneyCanvas({
       const resizeObserver = new ResizeObserver(resize);
       if (containerRef.current) resizeObserver.observe(containerRef.current);
 
-      // Draw the first frame as a poster as soon as it decodes.
-      const cache = cacheRef.current;
-      void cache?.request(0).then((img) => {
+      // Poster: draw the very first frame as soon as it decodes.
+      void cache.request(0).then((img) => {
         if (!cancelled && img && !lastDrawnRef.current) draw(img);
       });
 
@@ -128,10 +125,6 @@ export default function JourneyCanvas({
           void c.request(idx);
           if (lastDrawnRef.current) draw(lastDrawnRef.current);
         }
-
-        const speed = Math.min(1, Math.abs(progress - lastProgressForSpeedRef.current) * 12);
-        lastProgressForSpeedRef.current = progress;
-        onStageChange?.(chapterAt(progress).ambience, speed);
       };
       tick();
 

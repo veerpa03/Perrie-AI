@@ -37,6 +37,21 @@ export const SITE = {
  */
 export const PRIMARY_SEQUENCE = "descent" as const;
 
+/**
+ * Opening fly-in. On page load Perrie flies in from far away and settles into
+ * the hero pose — this plays ONCE, automatically, and is NOT scrollable. It
+ * covers descent frames 0 .. HERO_FRAC of the sequence. The scrollable journey
+ * then begins AT the hero rest frame (HERO_FRAC) and maps scroll 0..1 onto
+ * frames HERO_FRAC..1, so scrolling back to the top rests on the hero frame
+ * and never replays the fly-in. The fly-in only runs again on a fresh load.
+ *
+ * `frameProgress` (0..1 over the whole sequence) drives the canvas; `scroll
+ * progress` (0..1) drives the chapter overlays and maps to
+ * frameProgress = HERO_FRAC + scroll * (1 - HERO_FRAC).
+ */
+export const HERO_FRAC = 0.2; // hero rest ≈ descent frame 69 — big Perrie, wings spread over clouds
+export const INTRO_MS = 2600; // fly-in duration
+
 export const CHAPTERS = [
   {
     id: "hero",
@@ -46,7 +61,7 @@ export const CHAPTERS = [
     primary: { label: "Meet Perrie", action: "demo" },
     secondary: { label: "Explore", action: "scroll-next" },
     from: 0,
-    to: 0.15,
+    to: 0.12,
     // Perrie launches from the top-left cloud; the whole right half is open sky.
     align: "right",
     justify: "center",
@@ -59,7 +74,7 @@ export const CHAPTERS = [
     eyebrow: "A little clarity",
     headline: "Make room for what matters.",
     support: "Plan. Draft. Research. Organize.",
-    from: 0.15,
+    from: 0.12,
     to: 0.46,
     align: "right",
     justify: "center",
@@ -72,7 +87,7 @@ export const CHAPTERS = [
     headline: "A simple ask. A lighter day.",
     support: "Tell Perrie what you have in mind.",
     from: 0.46,
-    to: 0.73,
+    to: 0.74,
     align: "right",
     justify: "center",
     heading: "h2",
@@ -84,7 +99,7 @@ export const CHAPTERS = [
     headline: "A little help goes a long way.",
     support: "Start with a request. Review the next step.",
     primary: { label: "See an example", action: "demo" },
-    from: 0.73,
+    from: 0.74,
     to: 1,
     align: "right",
     justify: "center",
