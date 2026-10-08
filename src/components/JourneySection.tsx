@@ -4,14 +4,14 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import JourneyCanvas from "./JourneyCanvas";
-import StoryPanels from "./StoryPanels";
+import StoryOverlay from "./StoryOverlay";
+import MobileJourney from "./MobileJourney";
+import ReducedMotionJourney from "./ReducedMotionJourney";
 import { JOURNEY_SCROLL_LENGTH_VH, PROGRESS_SMOOTHING, BREAKPOINTS } from "@/lib/constants";
 import { setJourneyBounds } from "@/lib/scrollTargets";
 import { useAudio } from "./AudioProvider";
 import { useReducedMotion } from "@/hooks/useReducedMotion";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
-import ReducedMotionJourney from "./ReducedMotionJourney";
-import MobileJourney from "./MobileJourney";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger);
@@ -70,19 +70,15 @@ function DesktopJourney() {
     >
       <div
         ref={stickyRef}
-        className="relative h-screen w-full overflow-hidden bg-[color:var(--color-sky)]"
+        className="relative h-[100svh] w-full overflow-hidden bg-[color:var(--color-sky)]"
       >
-        <div className="grid h-full w-full grid-cols-[1.1fr_1fr]">
-          <JourneyCanvas
-            progressRef={smoothProgressRef}
-            tier="lg"
-            className="relative order-1 h-full w-full"
-            onStageChange={reportJourneyState}
-          />
-          <div className="relative z-10 order-2 flex items-center justify-start overflow-hidden">
-            <StoryPanels progressRef={smoothProgressRef} />
-          </div>
-        </div>
+        <JourneyCanvas
+          progressRef={smoothProgressRef}
+          tier="lg"
+          className="absolute inset-0 h-full w-full"
+          onStageChange={reportJourneyState}
+        />
+        <StoryOverlay progressRef={smoothProgressRef} variant="desktop" />
       </div>
     </section>
   );

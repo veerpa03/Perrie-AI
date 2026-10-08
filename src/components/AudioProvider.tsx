@@ -2,13 +2,12 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { AudioController } from "@/lib/audioController";
-import type { StageId } from "@/lib/constants";
-import type { SequenceName } from "@/lib/types";
+import type { Ambience } from "@/lib/constants";
 
 interface AudioContextValue {
   enabled: boolean;
   toggle: () => void;
-  reportJourneyState: (stage: StageId, sequence: SequenceName, speed: number) => void;
+  reportJourneyState: (ambience: Ambience, speed: number) => void;
 }
 
 const Ctx = createContext<AudioContextValue | null>(null);
@@ -38,8 +37,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           controllerRef.current?.setEnabled(next);
           return next;
         }),
-      reportJourneyState: (stage, sequence, speed) => {
-        controllerRef.current?.update(stage, sequence, speed);
+      reportJourneyState: (ambience, speed) => {
+        controllerRef.current?.update(ambience, speed);
       },
     }),
     [enabled]
