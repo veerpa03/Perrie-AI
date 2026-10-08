@@ -11,10 +11,7 @@ import { useDemoModal } from "./DemoModal";
 export default function FinalCTA() {
   const { open } = useDemoModal();
   return (
-    <section
-      className="relative overflow-hidden px-6 py-24"
-      style={{ background: "var(--color-powder)" }}
-    >
+    <section className="clay-canvas relative overflow-hidden px-6 py-24">
       <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
         <motion.h2
           initial={{ opacity: 0, y: 16 }}

@@ -15,9 +15,9 @@
   --color-dusty: #CDDFF0;
   --color-peach: #F1D3C5;
 
-  --font-heading: var(--font-jakarta), "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-body: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-anton), "Anton", "Arial Narrow", ui-sans-serif, sans-serif;
+  --font-heading: var(--font-fredoka), "Fredoka", ui-rounded, "Nunito", system-ui, sans-serif;
+  --font-body: var(--font-nunito), "Nunito", ui-rounded, system-ui, sans-serif;
+  --font-display: var(--font-fredoka), "Fredoka", ui-rounded, system-ui, sans-serif;
 }
 
 :root {
@@ -92,10 +92,21 @@ h1, h2, h3, h4, .font-heading {
 
 .font-display {
   font-family: var(--font-display);
-  font-weight: 400; /* Anton is 400 only — never synthesize bold */
-  letter-spacing: 0.01em;
-  line-height: 0.92;
-  text-transform: uppercase;
+  font-weight: 600; /* Fredoka rounded display */
+  letter-spacing: -0.01em;
+  line-height: 1;
+}
+
+/* Soft, bright Pixar-clay canvas used across the non-footage sections and
+   pages. Near-white centre (so the keyed hover bird blends) with gentle
+   pastel blooms drifting to the edges. */
+.clay-canvas {
+  background-color: #FBF8F3;
+  background-image:
+    radial-gradient(42% 40% at 6% 8%, rgba(220, 211, 239, 0.6), transparent 66%),
+    radial-gradient(40% 38% at 95% 10%, rgba(201, 227, 215, 0.55), transparent 66%),
+    radial-gradient(44% 42% at 92% 95%, rgba(241, 211, 197, 0.55), transparent 68%),
+    radial-gradient(42% 40% at 5% 94%, rgba(205, 223, 240, 0.55), transparent 68%);
 }
 
 /* Soft inflated clay surface. */
@@ -202,6 +213,21 @@ h1, h2, h3, h4, .font-heading {
 }
 @media (prefers-reduced-motion: reduce) {
   .perrie-float {
+    animation: none;
+  }
+}
+
+/* Decorative feather drift. */
+@keyframes feather-drift {
+  0% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  50% { transform: translateY(-16px) rotate(calc(var(--rot, 0deg) + 6deg)); }
+  100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
+}
+.feather-drift {
+  animation: feather-drift 7s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .feather-drift {
     animation: none;
   }
 }

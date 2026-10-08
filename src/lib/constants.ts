@@ -286,34 +286,36 @@ export const STEPS = [
  *
  * Tuning lives in ORBIT below — swap radius/tilt/scroll length there.
  */
+export const ORBIT_HEADLINE = "A little help. All around you.";
+
 export const ORBIT_FEATURES = [
   {
     id: "plan",
     icon: "calendar",
-    title: "MAKE ROOM.",
+    label: "Plan your day.",
     description: "Bring a little structure to your day.",
-    accent: "var(--color-peach)",
+    accent: "var(--color-powder)",
   },
   {
     id: "write",
     icon: "envelope",
-    title: "FIND THE WORDS.",
+    label: "Draft a message.",
     description: "Give your next message a starting point.",
-    accent: "var(--color-powder)",
+    accent: "var(--color-mint)",
   },
   {
     id: "research",
     icon: "search",
-    title: "STAY CURIOUS.",
+    label: "Research a topic.",
     description: "Give your questions a clearer direction.",
-    accent: "var(--color-mint)",
+    accent: "var(--color-dusty)",
   },
   {
     id: "organize",
     icon: "notebook",
-    title: "CLEAR THE CLUTTER.",
+    label: "Organize your tasks.",
     description: "Turn scattered tasks into a next step.",
-    accent: "var(--color-dusty)",
+    accent: "var(--color-peach)",
   },
 ] as const;
 
@@ -325,19 +327,22 @@ export const ORBIT = {
   scrollLengthVh: 360,
   // Smoothing applied to the scroll-derived rotation (0 = instant, 1 = frozen).
   rotationSmoothing: 0.14,
-  // Responsive geometry: horizontal orbit radius, vertical tilt radius, and
-  // card width per breakpoint (px). The bird sits at the centre; the ring sits
-  // slightly below its face (verticalOffset).
+  // A gently tilted ellipse (radians) so the ring reads as 3D, like the
+  // reference — left side dips, right side lifts.
+  tilt: -0.12,
+  // Responsive geometry: horizontal/vertical orbit radii, floating-icon size,
+  // and the ring's vertical offset from the stage centre (px). The bird sits
+  // at the centre; icons orbit on the ring.
   geometry: {
-    desktop: { radiusX: 352, radiusY: 46, cardW: 170, verticalOffset: 78 },
-    tablet: { radiusX: 260, radiusY: 40, cardW: 156, verticalOffset: 72 },
-    mobile: { radiusX: 132, radiusY: 26, cardW: 132, verticalOffset: 118 },
+    desktop: { radiusX: 392, radiusY: 82, iconSize: 128, verticalOffset: 12 },
+    tablet: { radiusX: 288, radiusY: 66, iconSize: 108, verticalOffset: 16 },
+    mobile: { radiusX: 150, radiusY: 52, iconSize: 84, verticalOffset: 40 },
   },
   // Depth → appearance mapping (depth = cos(angle), 1 = front, -1 = back).
-  scaleBack: 0.66,
-  scaleFront: 1.1,
-  opacityBack: 0.42,
-  maxBlurPx: 5,
+  scaleBack: 0.62,
+  scaleFront: 1.12,
+  opacityBack: 0.5,
+  maxBlurPx: 4,
 } as const;
 
 export const FAQ = [

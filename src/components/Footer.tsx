@@ -1,9 +1,6 @@
 export default function Footer() {
   return (
-    <footer
-      className="px-6 py-10 text-center"
-      style={{ background: "var(--color-powder)" }}
-    >
+    <footer className="clay-canvas px-6 py-10 text-center">
       <p className="mx-auto max-w-md text-xs leading-relaxed text-[color:var(--color-slate)]/55">
         This site is a frontend preview. Sign-in and the task examples shown here
         are not yet connected to a live backend — nothing is scheduled, sent, or
