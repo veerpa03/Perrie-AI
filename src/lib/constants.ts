@@ -277,6 +277,69 @@ export const STEPS = [
   },
 ] as const;
 
+/**
+ * Orbit carousel (redesign). Four product features rotate on a wide, gently
+ * tilted elliptical orbit around the stationary hovering Perrie. One scroll-
+ * derived rotation value is authoritative (see PerrieOrbitSection); cards
+ * compute their screen position from their angle, so there is no competing
+ * GSAP/Framer transform on the same property.
+ *
+ * Tuning lives in ORBIT below — swap radius/tilt/scroll length there.
+ */
+export const ORBIT_FEATURES = [
+  {
+    id: "plan",
+    icon: "calendar",
+    title: "MAKE ROOM.",
+    description: "Bring a little structure to your day.",
+    accent: "var(--color-peach)",
+  },
+  {
+    id: "write",
+    icon: "envelope",
+    title: "FIND THE WORDS.",
+    description: "Give your next message a starting point.",
+    accent: "var(--color-powder)",
+  },
+  {
+    id: "research",
+    icon: "search",
+    title: "STAY CURIOUS.",
+    description: "Give your questions a clearer direction.",
+    accent: "var(--color-mint)",
+  },
+  {
+    id: "organize",
+    icon: "notebook",
+    title: "CLEAR THE CLUTTER.",
+    description: "Turn scattered tasks into a next step.",
+    accent: "var(--color-dusty)",
+  },
+] as const;
+
+export type OrbitIcon = (typeof ORBIT_FEATURES)[number]["icon"];
+
+export const ORBIT = {
+  // Scroll length of the orbit section, in viewport heights. Long enough to
+  // read all four features across one full rotation.
+  scrollLengthVh: 360,
+  // Smoothing applied to the scroll-derived rotation (0 = instant, 1 = frozen).
+  rotationSmoothing: 0.14,
+  // Responsive geometry: horizontal orbit radius, vertical tilt radius, and
+  // card width per breakpoint (px). The bird sits at the centre; the ring sits
+  // slightly below its face (verticalOffset).
+  geometry: {
+    desktop: { radiusX: 352, radiusY: 46, cardW: 170, verticalOffset: 78 },
+    tablet: { radiusX: 260, radiusY: 40, cardW: 156, verticalOffset: 72 },
+    mobile: { radiusX: 132, radiusY: 26, cardW: 132, verticalOffset: 118 },
+  },
+  // Depth → appearance mapping (depth = cos(angle), 1 = front, -1 = back).
+  scaleBack: 0.66,
+  scaleFront: 1.1,
+  opacityBack: 0.42,
+  maxBlurPx: 5,
+} as const;
+
 export const FAQ = [
   {
     q: "Is Perrie connected to my real accounts yet?",

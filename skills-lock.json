@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "claymorphism": {
+      "source": "sickn33/agentic-awesome-skills",
+      "sourceType": "github",
+      "skillPath": "skills/design-it/claymorphism/SKILL.md",
+      "computedHash": "a82129d5e46fb63fdf3c3a79389df6d735f0dda6a7b36f14781f997a7267f53b"
+    }
+  }
+}

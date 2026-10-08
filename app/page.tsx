@@ -1,23 +1,28 @@
 import SiteProviders from "@/components/SiteProviders";
-import Navbar from "@/components/Navbar";
 import JourneySection from "@/components/JourneySection";
-import { CapabilitiesSection, HowItWorksSection, FinalCTA } from "@/components/ExperienceSections";
-import FAQSection from "@/components/FAQSection";
+import PerrieOrbitSection from "@/components/PerrieOrbitSection";
+import FinalCTA from "@/components/FinalCTA";
 import Footer from "@/components/Footer";
+import AnimatedSignInButton from "@/components/AnimatedSignInButton";
+import FloatingSoundToggle from "@/components/FloatingSoundToggle";
+import { LiquidGlassDefs } from "@/components/ui/liquid-glass";
 
 export default function Home() {
   return (
     <SiteProviders>
-      <Navbar />
+      <LiquidGlassDefs />
+      {/* The landing page's only chrome: one Sign-in control (upper-right) and
+          a small sound toggle (lower-left). No navbar, links, or wordmark. */}
+      <AnimatedSignInButton />
+      <FloatingSoundToggle />
       <main id="main">
-        {/* The page's single, persistent h1. Visible chapter headings in the
-            cinematic overlay cross-fade and are inerted as you scroll, so the
-            document keeps one stable top-level heading here. */}
+        {/* Single persistent page heading (cinematic/overlay headings are h2s). */}
         <h1 className="sr-only">Perrie — your personal AI assistant</h1>
+        {/* 1–2. Cinematic descent → tree landing (unchanged flight experience). */}
         <JourneySection />
-        <CapabilitiesSection />
-        <HowItWorksSection />
-        <FAQSection />
+        {/* 3–5. Full-viewport orbit carousel around the hovering Perrie. */}
+        <PerrieOrbitSection />
+        {/* 6. Minimal closing call to action. */}
         <FinalCTA />
       </main>
       <Footer />

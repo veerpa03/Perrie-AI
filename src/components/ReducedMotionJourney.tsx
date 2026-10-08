@@ -57,7 +57,7 @@ export default function ReducedMotionJourney() {
             </button>
             <button
               type="button"
-              onClick={() => scrollToId("capabilities")}
+              onClick={() => scrollToId("features")}
               className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[color:var(--color-slate)]/15 bg-white/70 px-6 py-3 text-sm font-semibold text-[color:var(--color-slate)]"
             >
               Explore

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter } from "next/font/google";
+import { Plus_Jakarta_Sans, Inter, Anton } from "next/font/google";
 import "./globals.css";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -11,8 +11,17 @@ const jakarta = Plus_Jakarta_Sans({
 
 const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-inter",
+  display: "swap",
+});
+
+// Oversized display type for the redesigned sections (TOONHUB direction).
+// Anton ships a single 400 weight — never synthesize bold.
+const anton = Anton({
+  subsets: ["latin"],
+  weight: ["400"],
+  variable: "--font-anton",
   display: "swap",
 });
 
@@ -27,7 +36,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${jakarta.variable} ${inter.variable} antialiased`}>
+      <body className={`${jakarta.variable} ${inter.variable} ${anton.variable} antialiased`}>
         <a href="#main" className="sr-only-focusable">
           Skip to main content
         </a>
