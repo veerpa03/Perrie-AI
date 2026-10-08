@@ -128,9 +128,13 @@ export default function StoryOverlay({ progressRef, variant = "desktop", enabled
 
       {/* Chapter text blocks. */}
       {CHAPTERS.map((c, i) => {
-        const Heading = c.heading === "h1" ? "h1" : "h2";
+        const Heading = c.heading;
         const primary = "primary" in c ? c.primary : undefined;
         const secondary = "secondary" in c ? c.secondary : undefined;
+        // Initial (pre-first-frame) hidden state: during the fly-in everything
+        // is hidden; otherwise only the hero can be active at progress 0. The
+        // rAF loop takes over precise state once it runs.
+        const initiallyHidden = !enabled || i !== 0;
         return (
           <section
             key={c.id}
@@ -138,12 +142,14 @@ export default function StoryOverlay({ progressRef, variant = "desktop", enabled
               blockRefs.current[i] = el;
             }}
             aria-label={c.headline}
+            aria-hidden={initiallyHidden ? true : undefined}
+            inert={initiallyHidden ? true : undefined}
             className={
               isMobile
                 ? "absolute inset-x-0 bottom-0 flex justify-center px-6 pb-[15vh] will-change-[opacity,transform]"
                 : "absolute inset-0 flex items-center justify-end will-change-[opacity,transform]"
             }
-            style={{ opacity: i === 0 ? 1 : 0 }}
+            style={{ opacity: initiallyHidden ? 0 : 1 }}
           >
             <div
               className={

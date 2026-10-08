@@ -50,6 +50,11 @@ export default function JourneyCanvas({
   const focalRef = useRef<Focal>(typeof focal === "function" ? focal(0) : focal);
   const focalFnRef = useRef(focal);
   focalFnRef.current = focal;
+  // Dirty-check + visibility gating so an idle, on-screen scene does no work
+  // and an off-screen scene does none at all.
+  const lastShownIdxRef = useRef(-1);
+  const lastFocalRef = useRef<Focal>({ x: -1, y: -1 });
+  const visibleRef = useRef(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,7 +68,7 @@ export default function JourneyCanvas({
 
       // Prewarm leading frames so the fly-in doesn't stutter waiting on decodes.
       const warm = Math.min(manifest.count, Math.max(0, prewarm));
-      for (let i = 0; i < warm; i++) void cache.request(i);
+      for (let i = 0; i < warm; i++) void cache.request(i).catch(() => {});
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -78,6 +83,8 @@ export default function JourneyCanvas({
         canvas.width = Math.max(1, Math.round(rect.width * dprRef.current));
         canvas.height = Math.max(1, Math.round(rect.height * dprRef.current));
         if (lastDrawnRef.current) draw(lastDrawnRef.current);
+        // Force a fresh draw of the current frame on the next tick.
+        lastShownIdxRef.current = -1;
       };
 
       const draw = (img: HTMLImageElement) => {
@@ -104,32 +111,55 @@ export default function JourneyCanvas({
       const resizeObserver = new ResizeObserver(resize);
       if (containerRef.current) resizeObserver.observe(containerRef.current);
 
+      // Pause all drawing while the scene is scrolled out of view.
+      const io = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) visibleRef.current = e.isIntersecting;
+        },
+        { threshold: 0 }
+      );
+      if (containerRef.current) io.observe(containerRef.current);
+
       // Poster: draw the very first frame as soon as it decodes.
-      void cache.request(0).then((img) => {
-        if (!cancelled && img && !lastDrawnRef.current) draw(img);
-      });
+      void cache
+        .request(0)
+        .then((img) => {
+          if (!cancelled && img && !lastDrawnRef.current) draw(img);
+        })
+        .catch(() => {});
 
       const tick = () => {
         rafRef.current = requestAnimationFrame(tick);
-        const progress = progressRef.current;
         const mf = manifestRef.current;
         const c = cacheRef.current;
         if (!mf || !c) return;
+        const progress = progressRef.current;
         const fn = focalFnRef.current;
-        focalRef.current = typeof fn === "function" ? fn(progress) : fn;
+        const f = typeof fn === "function" ? fn(progress) : fn;
+        focalRef.current = f;
+        if (!visibleRef.current) return;
+
         const idx = frameIndexFor(PRIMARY_SEQUENCE, progress, mf.count);
+        const focalChanged = f.x !== lastFocalRef.current.x || f.y !== lastFocalRef.current.y;
+        if (idx === lastShownIdxRef.current && !focalChanged) return; // nothing changed
+
         const img = c.getIfReady(idx);
         if (img) {
           draw(img);
+          lastShownIdxRef.current = idx;
+          lastFocalRef.current = { x: f.x, y: f.y };
         } else {
-          void c.request(idx);
+          void c.request(idx).catch(() => {});
+          // Hold the last valid frame while the target decodes.
           if (lastDrawnRef.current) draw(lastDrawnRef.current);
+          lastFocalRef.current = { x: f.x, y: f.y };
         }
       };
       tick();
 
       return () => {
         resizeObserver.disconnect();
+        io.disconnect();
       };
     }
 

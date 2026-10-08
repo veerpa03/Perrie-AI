@@ -22,7 +22,9 @@ const Ctx = createContext<DemoModalContextValue | null>(null);
 export function DemoModalProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const bgRef = useRef<HTMLDivElement>(null);
   const titleId = "demo-modal-title";
 
   const open = useCallback(() => {
@@ -34,13 +36,20 @@ export function DemoModalProvider({ children }: { children: React.ReactNode }) {
     setIsOpen(false);
   }, []);
 
-  // Lock scroll, focus the dialog, restore focus on close, trap Tab, close on Escape.
   useEffect(() => {
     if (!isOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    const dialog = dialogRef.current;
-    dialog?.focus();
+
+    // Remove the rest of the page from the tab order and the a11y tree while
+    // the dialog is open, so focus physically cannot escape behind it.
+    const bg = bgRef.current;
+    if (bg) {
+      bg.inert = true;
+      bg.setAttribute("aria-hidden", "true");
+    }
+
+    dialogRef.current?.focus();
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -48,37 +57,59 @@ export function DemoModalProvider({ children }: { children: React.ReactNode }) {
         close();
         return;
       }
-      if (e.key === "Tab" && dialog) {
-        const focusables = dialog.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), input, [tabindex]:not([tabindex="-1"])'
-        );
-        if (focusables.length === 0) return;
-        const first = focusables[0];
-        const last = focusables[focusables.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
+      if (e.key !== "Tab") return;
+      const root = overlayRef.current;
+      if (!root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement as HTMLElement | null;
+      const inTrap = active ? focusables.includes(active) : false;
+      if (e.shiftKey) {
+        if (!inTrap || active === first) {
           e.preventDefault();
           last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
+        }
+      } else {
+        if (!inTrap || active === last) {
           e.preventDefault();
           first.focus();
         }
       }
     };
     document.addEventListener("keydown", onKeyDown);
+
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.body.style.overflow = previousOverflow;
-      triggerRef.current?.focus?.();
+      if (bg) {
+        bg.inert = false;
+        bg.removeAttribute("aria-hidden");
+      }
+      // Restore focus to the trigger if it still exists, else a stable control.
+      const t = triggerRef.current;
+      if (t && t.isConnected && typeof t.focus === "function") {
+        t.focus();
+      } else {
+        document
+          .querySelector<HTMLElement>("[data-demo-return-focus]")
+          ?.focus();
+      }
     };
   }, [isOpen, close]);
 
   return (
     <Ctx.Provider value={{ open, close, isOpen }}>
-      {children}
+      <div ref={bgRef}>{children}</div>
       {isOpen && (
         <div
+          ref={overlayRef}
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6"
-          aria-hidden={false}
         >
           <button
             type="button"

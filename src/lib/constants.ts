@@ -65,7 +65,9 @@ export const CHAPTERS = [
     // Perrie launches from the top-left cloud; the whole right half is open sky.
     align: "right",
     justify: "center",
-    heading: "h1",
+    // The cross-fading overlay headings are h2s; the page's single persistent
+    // h1 lives in app/page.tsx so it is never inerted when scrolling past.
+    heading: "h2",
     // Environment bed for the audio layer.
     ambience: "sky",
   },

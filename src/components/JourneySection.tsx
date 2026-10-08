@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useMounted } from "@/hooks/useMounted";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import JourneyCanvas from "./JourneyCanvas";
@@ -128,7 +129,6 @@ function DesktopJourney() {
       if (prevRestoration && "scrollRestoration" in history)
         history.scrollRestoration = prevRestoration;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -162,10 +162,15 @@ function DesktopJourney() {
 }
 
 export default function JourneySection() {
+  const mounted = useMounted();
   const reducedMotion = useReducedMotion();
   const isMobile = useMediaQuery(`(max-width: ${BREAKPOINTS.mobile}px)`);
 
-  if (reducedMotion) return <ReducedMotionJourney />;
+  // Until the client-only media queries resolve, render the static, accessible,
+  // JS-independent variant. This is what the server sends and what the first
+  // client render produces, so reduced-motion and mobile visitors never mount
+  // (and then discard) the pinned GSAP journey + canvas.
+  if (!mounted || reducedMotion) return <ReducedMotionJourney />;
   if (isMobile) return <MobileJourney />;
   return <DesktopJourney />;
 }

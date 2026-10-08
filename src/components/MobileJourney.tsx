@@ -18,6 +18,7 @@ const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
  */
 export default function MobileJourney() {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const stickyRef = useRef<HTMLDivElement>(null);
   const scrollProgressRef = useRef(0);
   const frameProgressRef = useRef(0);
   const [introDone, setIntroDone] = useState(false);
@@ -75,8 +76,12 @@ export default function MobileJourney() {
         }
       } else {
         const rect = wrapper.getBoundingClientRect();
-        const viewportH = window.innerHeight;
-        const total = rect.height - viewportH;
+        // Measure the actual sticky (pinned) height rather than reading a
+        // fluctuating window.innerHeight — the sticky child is 100svh, so the
+        // real pin travel is wrapperHeight - stickyHeight, and p reaches 1
+        // exactly at the unpin point even as the mobile URL bar toggles.
+        const stickyH = stickyRef.current?.getBoundingClientRect().height ?? window.innerHeight;
+        const total = rect.height - stickyH;
         const scrolled = -rect.top;
         const p = total > 0 ? Math.min(1, Math.max(0, scrolled / total)) : 0;
         scrollProgressRef.current = p;
@@ -107,7 +112,10 @@ export default function MobileJourney() {
       style={{ height: `${JOURNEY_SCROLL_LENGTH_VH}vh` }}
       aria-label="Perrie's journey: from above the clouds to the tree"
     >
-      <div className="sticky top-0 h-[100svh] w-full overflow-hidden bg-[color:var(--color-sky)]">
+      <div
+        ref={stickyRef}
+        className="sticky top-0 h-[100svh] w-full overflow-hidden bg-[color:var(--color-sky)]"
+      >
         <JourneyCanvas
           progressRef={frameProgressRef}
           tier="sm"

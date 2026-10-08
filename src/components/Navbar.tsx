@@ -21,7 +21,7 @@ export default function Navbar() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-[color:var(--color-slate)]/10 bg-[color:var(--color-cloud)]/70 backdrop-blur-md">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link href="/" className="focus-ring flex items-center gap-2">
+        <Link href="/" data-demo-return-focus className="focus-ring flex items-center gap-2">
           <Image src="/mascot/front.png" alt="" width={32} height={32} className="h-8 w-8" />
           <span className="font-heading text-lg font-bold tracking-tight text-[color:var(--color-slate)]">
             {SITE.name}

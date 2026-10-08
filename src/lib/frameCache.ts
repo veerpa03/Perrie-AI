@@ -13,10 +13,15 @@ export class FrameCache {
   private tier: "lg" | "sm";
   private cache = new Map<number, HTMLImageElement>();
   private pending = new Map<number, Promise<HTMLImageElement>>();
+  // Indices whose decode has failed, with how many attempts. A known-bad frame
+  // is skipped (up to MAX_DECODE_TRIES) instead of being re-decoded every frame.
+  private failed = new Map<number, number>();
   private lastIndex = 0;
   private inFlight = 0;
   private queue: number[] = [];
   private disposed = false;
+
+  private static readonly MAX_DECODE_TRIES = 3;
 
   constructor(manifest: SequenceManifest, tier: "lg" | "sm") {
     this.manifest = manifest;
@@ -38,6 +43,10 @@ export class FrameCache {
     return this.cache.get(clamped);
   }
 
+  private isExhausted(index: number): boolean {
+    return (this.failed.get(index) ?? 0) >= FrameCache.MAX_DECODE_TRIES;
+  }
+
   /** Request a frame, decode it if needed, and opportunistically preload neighbors. */
   async request(index: number): Promise<HTMLImageElement | undefined> {
     this.lastIndex = index;
@@ -45,7 +54,8 @@ export class FrameCache {
     const cached = this.cache.get(clamped);
     this.preloadAround(clamped);
     if (cached) return cached;
-    return this.decode(clamped);
+    if (this.isExhausted(clamped)) return undefined;
+    return this.decode(clamped).catch(() => undefined);
   }
 
   private preloadAround(center: number) {
@@ -53,7 +63,7 @@ export class FrameCache {
     for (let offset = -r; offset <= r; offset++) {
       const idx = center + offset;
       if (idx < 0 || idx >= this.manifest.count) continue;
-      if (this.cache.has(idx) || this.pending.has(idx)) continue;
+      if (this.cache.has(idx) || this.pending.has(idx) || this.isExhausted(idx)) continue;
       this.enqueue(idx);
     }
   }
@@ -67,8 +77,8 @@ export class FrameCache {
   private drain() {
     while (this.inFlight < FRAME_CACHE.concurrency && this.queue.length) {
       const idx = this.queue.shift()!;
-      if (this.cache.has(idx) || this.pending.has(idx)) continue;
-      void this.decode(idx);
+      if (this.cache.has(idx) || this.pending.has(idx) || this.isExhausted(idx)) continue;
+      void this.decode(idx).catch(() => undefined);
     }
   }
 
@@ -92,6 +102,7 @@ export class FrameCache {
       img.onerror = (err) => {
         this.inFlight--;
         this.pending.delete(index);
+        this.failed.set(index, (this.failed.get(index) ?? 0) + 1);
         this.drain();
         reject(err);
       };
@@ -116,6 +127,7 @@ export class FrameCache {
     this.disposed = true;
     this.cache.clear();
     this.pending.clear();
+    this.failed.clear();
     this.queue = [];
   }
 }

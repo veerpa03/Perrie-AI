@@ -26,6 +26,9 @@ export class AudioController {
   private flutterPlaying = false;
   private lastSpeed = 0;
   private lastWhooshAt = 0;
+  private lastWindTarget = -1;
+  private lastCityTarget = -1;
+  private lastFlutterTarget = -1;
   private flightFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
   init() {
@@ -39,6 +42,10 @@ export class AudioController {
 
   setEnabled(enabled: boolean) {
     this.enabled = enabled;
+    // Invalidate cached fade targets so update() re-applies them either way.
+    this.lastWindTarget = -1;
+    this.lastCityTarget = -1;
+    this.lastFlutterTarget = -1;
     if (!enabled) {
       this.wind?.fade(this.wind.volume(), 0, 400);
       this.ambienceCity?.fade(this.ambienceCity.volume(), 0, 400);
@@ -73,17 +80,25 @@ export class AudioController {
     const windTarget = ambience === "sky" ? AUDIO.wind.volume * Math.min(1, 0.4 + speed) : 0;
     const cityTarget = ambience === "city" ? AUDIO.ambience.volume : 0;
 
-    if (this.wind) this.wind.fade(this.wind.volume(), windTarget, AUDIO.wind.fadeMs);
-    if (this.ambienceCity)
+    // Only (re)start a fade when the target moves meaningfully — otherwise a
+    // stationary scrub would restart every fade ~60×/sec and none would finish.
+    if (this.wind && Math.abs(windTarget - this.lastWindTarget) > 0.01) {
+      this.wind.fade(this.wind.volume(), windTarget, AUDIO.wind.fadeMs);
+      this.lastWindTarget = windTarget;
+    }
+    if (this.ambienceCity && Math.abs(cityTarget - this.lastCityTarget) > 0.01) {
       this.ambienceCity.fade(this.ambienceCity.volume(), cityTarget, AUDIO.ambience.fadeMs);
+      this.lastCityTarget = cityTarget;
+    }
 
     const flutterTarget = speed > 0.08 ? AUDIO.flutter.volume * Math.min(1, speed * 1.5) : 0;
-    if (this.flutter) {
+    if (this.flutter && Math.abs(flutterTarget - this.lastFlutterTarget) > 0.01) {
       if (flutterTarget > 0 && !this.flutter.playing()) {
         this.flutter.play();
         this.flutterPlaying = true;
       }
       this.flutter.fade(this.flutter.volume(), flutterTarget, 250);
+      this.lastFlutterTarget = flutterTarget;
       if (this.flightFadeTimer) clearTimeout(this.flightFadeTimer);
       if (flutterTarget === 0) {
         this.flightFadeTimer = setTimeout(() => {

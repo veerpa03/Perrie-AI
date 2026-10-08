@@ -10,6 +10,10 @@ export default function Home() {
     <SiteProviders>
       <Navbar />
       <main id="main">
+        {/* The page's single, persistent h1. Visible chapter headings in the
+            cinematic overlay cross-fade and are inerted as you scroll, so the
+            document keeps one stable top-level heading here. */}
+        <h1 className="sr-only">Perrie — your personal AI assistant</h1>
         <JourneySection />
         <CapabilitiesSection />
         <HowItWorksSection />
