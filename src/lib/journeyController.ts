@@ -8,8 +8,12 @@ import type { SequenceName } from "./types";
  *
  * Both sequences are indexed by the same normalized progress (0 = sky,
  * 1 = perched): descent frame = progress * (count-1); ascent frame =
- * (1-progress) * (count-1). See STAGES in constants.ts for how the
- * stage boundaries were matched between the two source sequences.
+ * (1-progress) * (count-1). See CHAPTERS in constants.ts for how the
+ * chapter boundaries map onto the descent frames.
+ *
+ * NOTE: the cinematic renderer (JourneyCanvas) scrubs the descent sequence
+ * directly in both directions, so this controller is retained only for the
+ * frameIndexFor helper below and as a reference for sequence switching.
  */
 export class JourneyController {
   private active: SequenceName = "descent";

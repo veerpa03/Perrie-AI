@@ -1,4 +1,4 @@
-// Central configuration for copy, colors, asset paths, stage mapping, and
+// Central configuration for copy, colors, asset paths, chapter mapping, and
 // scroll/audio tuning. Edit values here rather than hunting through
 // components.
 
@@ -13,53 +13,152 @@ export const COLORS = {
 
 export const SITE = {
   name: "Perrie",
-  headline: "Less busywork. More room for life.",
-  subhead:
-    "Meet Perrie, your personal AI assistant. Tell it what you need, and keep your day moving.",
+  headline: "Less busywork. More life.",
+  subhead: "Your personal AI assistant.",
 };
 
-// Normalized journey progress: 0 = hero above the clouds, 1 = landed on the tree.
-// Stage boundaries were set by visually inspecting the ascent/descent frame
-// sequences for the closest matching composition (sky, cloud layer, city
-// reveal, tree approach, perched) in References/Acend_frames and
-// References/Decend_frames.
-export const STAGES = [
-  { id: "sky", from: 0, to: 0.18 },
-  { id: "clouds", from: 0.18, to: 0.45 },
-  { id: "city-reveal", from: 0.45, to: 0.64 },
-  { id: "tree-approach", from: 0.64, to: 0.88 },
-  { id: "perched", from: 0.88, to: 1 },
+/**
+ * The cinematic journey is a single scrubbed frame sequence. Progress is one
+ * normalized value: 0 = hero above the clouds, 1 = perched on the tree.
+ *
+ * We scrub the DESCENT sequence (hero -> landing) and play it in reverse on
+ * upward scroll. The ascent footage is a separate take and is not
+ * frame-matched to the descent, so switching between the two mid-flight would
+ * jump; reversible descent keeps the motion perfectly continuous in both
+ * directions. See JourneyCanvas for the renderer and the handoff notes for
+ * the asset limitation.
+ *
+ * Chapter `from`/`to` are normalized progress ranges, chosen by inspecting
+ * the descent frames for the matching composition:
+ *   hero     ~frame 0    (bird launching off a cloud, open sky to the right)
+ *   clarity  ~frame 55   (wings-spread flight through the cloud layer)
+ *   city     ~frame 220  (gliding over the city grid)
+ *   landing  ~frame 344  (perched on the branch, skyline behind)
+ */
+export const PRIMARY_SEQUENCE = "descent" as const;
+
+export const CHAPTERS = [
+  {
+    id: "hero",
+    eyebrow: "Meet Perrie",
+    headline: "Less busywork. More life.",
+    support: "Your personal AI assistant.",
+    primary: { label: "Meet Perrie", action: "demo" },
+    secondary: { label: "Explore", action: "scroll-next" },
+    from: 0,
+    to: 0.15,
+    // Perrie launches from the top-left cloud; the whole right half is open sky.
+    align: "right",
+    justify: "center",
+    heading: "h1",
+    // Environment bed for the audio layer.
+    ambience: "sky",
+  },
+  {
+    id: "clarity",
+    eyebrow: "A little clarity",
+    headline: "Make room for what matters.",
+    support: "Plan. Draft. Research. Organize.",
+    from: 0.15,
+    to: 0.46,
+    align: "right",
+    justify: "center",
+    heading: "h2",
+    ambience: "sky",
+  },
+  {
+    id: "city",
+    eyebrow: "Your next step",
+    headline: "A simple ask. A lighter day.",
+    support: "Tell Perrie what you have in mind.",
+    from: 0.46,
+    to: 0.73,
+    align: "right",
+    justify: "center",
+    heading: "h2",
+    ambience: "city",
+  },
+  {
+    id: "landing",
+    eyebrow: "Your everyday companion",
+    headline: "A little help goes a long way.",
+    support: "Start with a request. Review the next step.",
+    primary: { label: "See an example", action: "demo" },
+    from: 0.73,
+    to: 1,
+    align: "right",
+    justify: "center",
+    heading: "h2",
+    ambience: "city",
+  },
 ] as const;
 
-export type StageId = (typeof STAGES)[number]["id"];
+export type ChapterId = (typeof CHAPTERS)[number]["id"];
+export type Ambience = (typeof CHAPTERS)[number]["ambience"];
 
-export function stageAt(progress: number): StageId {
+export function chapterAt(progress: number): (typeof CHAPTERS)[number] {
   const p = Math.min(1, Math.max(0, progress));
-  for (const s of STAGES) {
-    if (p >= s.from && p <= s.to) return s.id;
+  for (const c of CHAPTERS) {
+    if (p >= c.from && p <= c.to) return c;
   }
-  return STAGES[STAGES.length - 1].id;
+  return CHAPTERS[CHAPTERS.length - 1];
 }
 
-// Scroll length of the journey section, in viewport heights.
-export const JOURNEY_SCROLL_LENGTH_VH = 420;
+// Scroll length of the journey section, in viewport heights. Longer = a
+// gentler, more cinematic scrub per frame.
+export const JOURNEY_SCROLL_LENGTH_VH = 520;
 
-// Direction-switch hysteresis: minimum accumulated progress delta (in the
-// opposite direction) required before the active sequence is allowed to
-// flip between descent/ascent frames. Prevents rapid flapping on small
-// scroll jitters.
+// Cover-fit focal point (fraction of the frame) used when the viewport aspect
+// differs from the footage (16:9). Biased left so Perrie — who lives on the
+// left/centre of frame — is protected from the crop on wide/landscape
+// viewports (desktop). On a 16:9-ish screen the whole frame shows anyway.
+export const JOURNEY_FOCAL = { x: 0.38, y: 0.5 } as const;
+
+/**
+ * On narrow (portrait) screens a 16:9 frame is cropped hard on the sides, so a
+ * single fixed focal point would crop Perrie out as she moves across frame.
+ * This track follows her approximate on-screen position through the descent so
+ * the cover crop keeps her in view — "aspect-ratio-aware scaling that protects
+ * the bird." Values were read from the descent frames at the sampled progress
+ * points. Interpolated by focalAt().
+ */
+export const JOURNEY_FOCAL_TRACK = [
+  { p: 0.0, x: 0.1, y: 0.42 },
+  { p: 0.2, x: 0.3, y: 0.32 },
+  { p: 0.45, x: 0.48, y: 0.46 },
+  { p: 0.64, x: 0.5, y: 0.34 },
+  { p: 0.84, x: 0.42, y: 0.44 },
+  { p: 1.0, x: 0.34, y: 0.52 },
+] as const;
+
+export function focalAt(progress: number): { x: number; y: number } {
+  const p = Math.min(1, Math.max(0, progress));
+  const t = JOURNEY_FOCAL_TRACK;
+  for (let i = 0; i < t.length - 1; i++) {
+    const a = t[i];
+    const b = t[i + 1];
+    if (p >= a.p && p <= b.p) {
+      const f = b.p === a.p ? 0 : (p - a.p) / (b.p - a.p);
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
+    }
+  }
+  const last = t[t.length - 1];
+  return { x: last.x, y: last.y };
+}
+
+// Direction-switch hysteresis is retained for the controller but the primary
+// renderer scrubs a single sequence, so it is effectively a no-op guard.
 export const DIRECTION_HYSTERESIS = 0.012;
 
 // Exponential smoothing factor applied to raw scroll progress each frame
-// (0 = no smoothing / instant, 1 = frozen). Keep small: this is "modest"
-// smoothing, not scroll hijacking.
-export const PROGRESS_SMOOTHING = 0.18;
+// (0 = instant, 1 = frozen). Restrained smoothing, not scroll hijacking.
+export const PROGRESS_SMOOTHING = 0.16;
 
 export const FRAME_CACHE = {
-  // Max decoded frames kept resident per sequence (desktop tier).
-  maxDecoded: 90,
+  // Max decoded frames kept resident per sequence.
+  maxDecoded: 96,
   // Frames to eagerly preload around the current index.
-  preloadRadius: 6,
+  preloadRadius: 8,
   // Concurrent in-flight decodes.
   concurrency: 4,
 };
@@ -70,10 +169,10 @@ export const BREAKPOINTS = {
 
 export const AUDIO = {
   masterVolume: 0.6,
-  ambience: { volume: 0.35, fadeMs: 1200 },
+  ambience: { volume: 0.32, fadeMs: 1200 },
   wind: { volume: 0.3, fadeMs: 900 },
-  whoosh: { volume: 0.45 },
-  flutter: { volume: 0.4 },
+  whoosh: { volume: 0.4 },
+  flutter: { volume: 0.38 },
   flightFadeOutMs: 600,
 };
 
@@ -143,6 +242,21 @@ export const DEMO_EXAMPLES = [
       "Flag anything with a deadline this week",
       "Hand back a clean, prioritized list",
     ],
+  },
+] as const;
+
+export const STEPS = [
+  {
+    title: "Tell Perrie what you need",
+    body: "Type it like you'd ask a person — no special syntax.",
+  },
+  {
+    title: "Review the proposed step",
+    body: "See exactly what Perrie plans to do first, before anything happens.",
+  },
+  {
+    title: "Follow it through",
+    body: "Watch the plan move forward, one clear step at a time.",
   },
 ] as const;
 

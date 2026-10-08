@@ -5,23 +5,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
 import AudioToggle from "./AudioToggle";
-import { scrollToStage } from "@/lib/scrollTargets";
+import { scrollToId } from "@/lib/scrollTargets";
 import { SITE } from "@/lib/constants";
+import { useDemoModal } from "./DemoModal";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
+  const { open: openDemo } = useDemoModal();
 
   const links = [
-    { label: "How it works", onClick: () => scrollToStage("tree-approach") },
-    { label: "Capabilities", onClick: () => scrollToStage("city-reveal") },
+    { label: "Discover", onClick: () => scrollToId("capabilities") },
+    { label: "How it works", onClick: () => scrollToId("how-it-works") },
   ];
 
   return (
-    <header className="fixed inset-x-0 top-0 z-50 border-b border-[color:var(--color-slate)]/10 bg-[color:var(--color-cloud)]/85 backdrop-blur-md">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-[color:var(--color-slate)]/10 bg-[color:var(--color-cloud)]/70 backdrop-blur-md">
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="focus-ring flex items-center gap-2">
           <Image src="/mascot/front.png" alt="" width={32} height={32} className="h-8 w-8" />
-          <span className="font-heading text-lg font-bold text-[color:var(--color-slate)]">
+          <span className="font-heading text-lg font-bold tracking-tight text-[color:var(--color-slate)]">
             {SITE.name}
           </span>
         </Link>
@@ -47,12 +49,13 @@ export default function Navbar() {
           >
             Sign in
           </Link>
-          <Link
-            href="/dashboard"
-            className="focus-ring rounded-full bg-[color:var(--color-teal-deep)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+          <button
+            type="button"
+            onClick={openDemo}
+            className="focus-ring rounded-full bg-[color:var(--color-teal-deep)] px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110 active:scale-[0.98]"
           >
-            Dashboard
-          </Link>
+            Meet Perrie
+          </button>
         </div>
 
         <div className="flex items-center gap-2 md:hidden">
@@ -91,12 +94,16 @@ export default function Navbar() {
           <Link href="/sign-in" className="focus-ring rounded-lg px-3 py-2 text-sm font-semibold text-[color:var(--color-slate)]">
             Sign in
           </Link>
-          <Link
-            href="/dashboard"
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              openDemo();
+            }}
             className="focus-ring mt-1 rounded-full bg-[color:var(--color-teal-deep)] px-4 py-2 text-center text-sm font-semibold text-white"
           >
-            Dashboard
-          </Link>
+            Meet Perrie
+          </button>
         </div>
       )}
     </header>
