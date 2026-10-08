@@ -37,6 +37,21 @@ export const SITE = {
  */
 export const PRIMARY_SEQUENCE = "descent" as const;
 
+/**
+ * Opening fly-in. On page load Perrie flies in from far away and settles into
+ * the hero pose — this plays ONCE, automatically, and is NOT scrollable. It
+ * covers descent frames 0 .. HERO_FRAC of the sequence. The scrollable journey
+ * then begins AT the hero rest frame (HERO_FRAC) and maps scroll 0..1 onto
+ * frames HERO_FRAC..1, so scrolling back to the top rests on the hero frame
+ * and never replays the fly-in. The fly-in only runs again on a fresh load.
+ *
+ * `frameProgress` (0..1 over the whole sequence) drives the canvas; `scroll
+ * progress` (0..1) drives the chapter overlays and maps to
+ * frameProgress = HERO_FRAC + scroll * (1 - HERO_FRAC).
+ */
+export const HERO_FRAC = 0.2; // hero rest ≈ descent frame 69 — big Perrie, wings spread over clouds
+export const INTRO_MS = 2600; // fly-in duration
+
 export const CHAPTERS = [
   {
     id: "hero",
@@ -46,11 +61,13 @@ export const CHAPTERS = [
     primary: { label: "Meet Perrie", action: "demo" },
     secondary: { label: "Explore", action: "scroll-next" },
     from: 0,
-    to: 0.15,
+    to: 0.12,
     // Perrie launches from the top-left cloud; the whole right half is open sky.
     align: "right",
     justify: "center",
-    heading: "h1",
+    // The cross-fading overlay headings are h2s; the page's single persistent
+    // h1 lives in app/page.tsx so it is never inerted when scrolling past.
+    heading: "h2",
     // Environment bed for the audio layer.
     ambience: "sky",
   },
@@ -59,7 +76,7 @@ export const CHAPTERS = [
     eyebrow: "A little clarity",
     headline: "Make room for what matters.",
     support: "Plan. Draft. Research. Organize.",
-    from: 0.15,
+    from: 0.12,
     to: 0.46,
     align: "right",
     justify: "center",
@@ -72,7 +89,7 @@ export const CHAPTERS = [
     headline: "A simple ask. A lighter day.",
     support: "Tell Perrie what you have in mind.",
     from: 0.46,
-    to: 0.73,
+    to: 0.74,
     align: "right",
     justify: "center",
     heading: "h2",
@@ -84,7 +101,7 @@ export const CHAPTERS = [
     headline: "A little help goes a long way.",
     support: "Start with a request. Review the next step.",
     primary: { label: "See an example", action: "demo" },
-    from: 0.73,
+    from: 0.74,
     to: 1,
     align: "right",
     justify: "center",
@@ -259,6 +276,74 @@ export const STEPS = [
     body: "Watch the plan move forward, one clear step at a time.",
   },
 ] as const;
+
+/**
+ * Orbit carousel (redesign). Four product features rotate on a wide, gently
+ * tilted elliptical orbit around the stationary hovering Perrie. One scroll-
+ * derived rotation value is authoritative (see PerrieOrbitSection); cards
+ * compute their screen position from their angle, so there is no competing
+ * GSAP/Framer transform on the same property.
+ *
+ * Tuning lives in ORBIT below — swap radius/tilt/scroll length there.
+ */
+export const ORBIT_HEADLINE = "A little help. All around you.";
+
+export const ORBIT_FEATURES = [
+  {
+    id: "plan",
+    icon: "calendar",
+    label: "Plan your day.",
+    description: "Bring a little structure to your day.",
+    accent: "var(--color-powder)",
+  },
+  {
+    id: "write",
+    icon: "envelope",
+    label: "Draft a message.",
+    description: "Give your next message a starting point.",
+    accent: "var(--color-mint)",
+  },
+  {
+    id: "research",
+    icon: "search",
+    label: "Research a topic.",
+    description: "Give your questions a clearer direction.",
+    accent: "var(--color-dusty)",
+  },
+  {
+    id: "organize",
+    icon: "notebook",
+    label: "Organize your tasks.",
+    description: "Turn scattered tasks into a next step.",
+    accent: "var(--color-peach)",
+  },
+] as const;
+
+export type OrbitIcon = (typeof ORBIT_FEATURES)[number]["icon"];
+
+export const ORBIT = {
+  // Scroll length of the orbit section, in viewport heights. Long enough to
+  // read all four features across one full rotation.
+  scrollLengthVh: 360,
+  // Smoothing applied to the scroll-derived rotation (0 = instant, 1 = frozen).
+  rotationSmoothing: 0.14,
+  // A gently tilted ellipse (radians) so the ring reads as 3D, like the
+  // reference — left side dips, right side lifts.
+  tilt: -0.12,
+  // Responsive geometry: horizontal/vertical orbit radii, floating-icon size,
+  // and the ring's vertical offset from the stage centre (px). The bird sits
+  // at the centre; icons orbit on the ring.
+  geometry: {
+    desktop: { radiusX: 392, radiusY: 82, iconSize: 128, verticalOffset: 12 },
+    tablet: { radiusX: 288, radiusY: 66, iconSize: 108, verticalOffset: 16 },
+    mobile: { radiusX: 150, radiusY: 52, iconSize: 84, verticalOffset: 40 },
+  },
+  // Depth → appearance mapping (depth = cos(angle), 1 = front, -1 = back).
+  scaleBack: 0.62,
+  scaleFront: 1.12,
+  opacityBack: 0.5,
+  maxBlurPx: 4,
+} as const;
 
 export const FAQ = [
   {

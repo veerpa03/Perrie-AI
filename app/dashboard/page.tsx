@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function DashboardPage() {
   return (
-    <main className="min-h-screen bg-[color:var(--color-cloud)]">
+    <main className="clay-canvas min-h-screen">
       <header className="border-b border-[color:var(--color-slate)]/10 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
           <Link href="/" className="focus-ring flex items-center gap-2">

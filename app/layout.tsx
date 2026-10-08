@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans, Inter } from "next/font/google";
+import { Fredoka, Nunito } from "next/font/google";
 import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
+// Rounded, friendly, tactile type to match the Pixar-clay world (the
+// claymorphism skill calls for thick rounded fonts). Fredoka = display,
+// Nunito = body.
+const fredoka = Fredoka({
   subsets: ["latin"],
-  weight: ["600", "700"],
-  variable: "--font-jakarta",
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-fredoka",
   display: "swap",
 });
 
-const inter = Inter({
+const nunito = Nunito({
   subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-inter",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-nunito",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Perrie — Less busywork. More room for life.",
+  title: "Perrie — A little help. All around you.",
   description:
     "Meet Perrie, your personal AI assistant. Tell it what you need, and keep your day moving.",
 };
@@ -27,7 +30,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className={`${jakarta.variable} ${inter.variable} antialiased`}>
+      <body className={`${fredoka.variable} ${nunito.variable} antialiased`}>
         <a href="#main" className="sr-only-focusable">
           Skip to main content
         </a>

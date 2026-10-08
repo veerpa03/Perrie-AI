@@ -41,9 +41,9 @@ export default function ReducedMotionJourney() {
           <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[color:var(--color-teal-deep)]">
             Meet {SITE.name}
           </p>
-          <h1 className="mt-3 font-heading text-4xl font-bold leading-[1.05] text-[color:var(--color-slate)] sm:text-5xl">
+          <h2 className="mt-3 font-heading text-4xl font-bold leading-[1.05] text-[color:var(--color-slate)] sm:text-5xl">
             {SITE.headline}
-          </h1>
+          </h2>
           <p className="mt-5 max-w-md text-lg leading-relaxed text-[color:var(--color-slate)]/80">
             {SITE.subhead}
           </p>
@@ -57,7 +57,7 @@ export default function ReducedMotionJourney() {
             </button>
             <button
               type="button"
-              onClick={() => scrollToId("capabilities")}
+              onClick={() => scrollToId("features")}
               className="focus-ring inline-flex items-center gap-1.5 rounded-full border border-[color:var(--color-slate)]/15 bg-white/70 px-6 py-3 text-sm font-semibold text-[color:var(--color-slate)]"
             >
               Explore

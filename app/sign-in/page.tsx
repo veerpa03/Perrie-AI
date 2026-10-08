@@ -10,7 +10,7 @@ export const metadata = {
 
 export default function SignInPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[color:var(--color-sky)] px-4 py-16">
+    <main className="clay-canvas flex min-h-screen items-center justify-center px-4 py-16">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex items-center justify-center gap-2">
           <Image src="/mascot/front.png" alt="" width={40} height={40} className="h-10 w-10" />
