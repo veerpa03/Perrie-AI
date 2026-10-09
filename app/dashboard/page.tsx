@@ -50,6 +50,7 @@ import { APP_INTEGRATIONS } from "@/server/integrations";
 import { PLATFORM_SERVICES } from "@/server/platform/services";
 import { providerStatuses } from "@/server/tools/registry";
 import { db } from "@/server/db";
+import { orEmpty } from "@/server/monitoring/safe";
 import { bluejayConfigured } from "@/server/monitoring/bluejay/client";
 import type { EvalScores } from "@/server/monitoring/bluejay/evaluations";
 import { guardrailTally } from "@/components/dashboard/EvaluationView";
@@ -88,8 +89,8 @@ export default async function OverviewPage() {
     listMessages(20),
     listGuardrails(30),
     providerStatuses(true),
-    db().list("call_evaluations", { orderBy: "created_at", ascending: false, limit: 50 }),
-    db().get("monitoring_state", "bluejay"),
+    orEmpty(db().list("call_evaluations", { orderBy: "created_at", ascending: false, limit: 50 }), []).then((r) => r.value),
+    orEmpty(db().get("monitoring_state", "bluejay"), null).then((r) => r.value),
   ]);
   const scored = evaluations.filter((e) => e.status === "completed" && e.scores);
   const tally = scored.map((e) => guardrailTally(e.scores as unknown as EvalScores));
@@ -458,7 +459,7 @@ export default async function OverviewPage() {
                 </div>
                 <div className="rounded-2xl px-2 py-2.5" style={{ background: ACCENTS.sky.soft }}>
                   <p className="text-sm font-bold" style={{ color: ACCENTS.sky.ink }}>
-                    {monitorState?.status === "ready" ? "On" : monitorState ? "Partly" : "Not set up"}
+                    {{ ready: "On", partial: "Partly", error: "Not reachable", not_set_up: "Not set up" }[monitorState?.status ?? "not_set_up"]}
                   </p>
                   <p className="text-[11px] font-bold text-[color:var(--color-slate)]/55">Bluejay</p>
                 </div>

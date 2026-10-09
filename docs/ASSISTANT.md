@@ -98,8 +98,8 @@ has a checklist showing what's still missing.
 1. Create a project at supabase.com (a development project, not production data).
 2. Connect the Supabase MCP server (already in `.mcp.json`). In a regular terminal run
    `claude /mcp`, choose **supabase**, and sign in in the browser. Then ask Claude Code to
-   apply `supabase/migrations/20261009000000_perrie_core.sql`, or paste that file into the
-   Supabase SQL editor.
+   apply both migrations in order — `supabase/migrations/20261009000000_perrie_core.sql` and
+   `supabase/migrations/20261009010000_monitoring.sql` — or paste them into the Supabase SQL editor.
    - Supabase's guidance: once the project exists, scope the MCP server to it
      (`&project_ref=<ref>`) and consider `&read_only=true`.
 3. Add `SUPABASE_URL` and `SUPABASE_SECRET_KEY` (Settings › API keys › secret

@@ -23,6 +23,7 @@ import { evaluateCallAction, refreshEvaluationAction } from "@/actions/monitorin
 import { EvaluationStatus, ScoreSummary } from "@/components/dashboard/EvaluationView";
 import { db, getProfile, listTurns } from "@/server/db";
 import { bluejayConfigured } from "@/server/monitoring/bluejay/client";
+import { orEmpty } from "@/server/monitoring/safe";
 import type { EvalScores } from "@/server/monitoring/bluejay/evaluations";
 import { prettyPhone } from "@/server/phone";
 
@@ -39,7 +40,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     listTurns(id),
     db().list("guardrail_events", { where: { call_id: id }, orderBy: "created_at" }),
     call.task_id ? db().get("tasks", call.task_id) : Promise.resolve(null),
-    db().list("call_evaluations", { where: { call_id: id }, limit: 1 }),
+    orEmpty(db().list("call_evaluations", { where: { call_id: id }, limit: 1 }), []).then((r) => r.value),
   ]);
   const evaluation = evals[0] ?? null;
   const monitoring = bluejayConfigured();

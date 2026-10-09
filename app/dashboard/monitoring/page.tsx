@@ -32,6 +32,7 @@ import { GUARDRAIL_METRICS, SCENARIOS, SIMULATION_NAME } from "@/server/monitori
 import { listIn } from "@/server/monitoring/bluejay/setup";
 import { getMonitoringConfig, getMonitoringState } from "@/server/monitoring/bluejay/state";
 import type { RunResult } from "@/server/monitoring/bluejay/simulations";
+import { orEmpty } from "@/server/monitoring/safe";
 import { prettyPhone } from "@/server/phone";
 
 export const metadata = { title: "Monitoring — Perrie" };
@@ -86,14 +87,16 @@ function Tile({ label, value, accent }: { label: string; value: string; accent: 
 
 export default async function MonitoringPage() {
   const configured = bluejayConfigured();
-  const [profile, state, config, evaluations, runs, calls] = await Promise.all([
+  const [profile, stateR, configR, evalR, runsR, calls] = await Promise.all([
     getProfile(),
-    getMonitoringState(),
-    getMonitoringConfig(),
-    db().list("call_evaluations", { orderBy: "created_at", ascending: false, limit: 50 }),
-    db().list("simulation_runs", { orderBy: "created_at", ascending: false, limit: 10 }),
+    orEmpty(getMonitoringState(), null),
+    orEmpty(getMonitoringConfig(), { agent_external_id: "perrie-voice" }),
+    orEmpty(db().list("call_evaluations", { orderBy: "created_at", ascending: false, limit: 50 }), []),
+    orEmpty(db().list("simulation_runs", { orderBy: "created_at", ascending: false, limit: 10 }), []),
     db().list("calls", { orderBy: "created_at", ascending: false, limit: 200 }),
   ]);
+  const [state, config, evaluations, runs] = [stateR.value, configR.value, evalR.value, runsR.value];
+  const migrationMissing = stateR.missing || evalR.missing || runsR.missing;
   const live = configured && state ? await loadLive() : null;
   const tz = profile?.timezone ?? "UTC";
   const callById = new Map(calls.map((c) => [c.id, c]));
@@ -139,6 +142,14 @@ export default async function MonitoringPage() {
         </ol>
       </ClayCard>
 
+      {migrationMissing && (
+        <p role="alert" className="mb-6 rounded-2xl bg-[#FFE7E3] px-4 py-3 text-sm font-bold text-[#B5403A]">
+          The monitoring tables aren&apos;t in your database yet — apply{" "}
+          <code>supabase/migrations/20261009010000_monitoring.sql</code> (Supabase SQL editor, or ask Claude Code via the
+          Supabase MCP), then reload.
+        </p>
+      )}
+
       {!configured ? (
         <ClayCard title="Connect Bluejay" icon={KeyRound} accent="sky" className="mb-8">
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-[color:var(--color-slate)]/80">
@@ -159,7 +170,7 @@ export default async function MonitoringPage() {
           </ol>
         </ClayCard>
       ) : (
-        <div className="mb-8 grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <ClayCard
             title="Bluejay setup"
             icon={Settings2}
@@ -231,7 +242,7 @@ export default async function MonitoringPage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
         <ClayCard title="Call scores" icon={ClipboardCheck} accent="mint">
           {evaluations.length ? (
             <ul className="space-y-2">
