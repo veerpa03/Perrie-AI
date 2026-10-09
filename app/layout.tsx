@@ -29,8 +29,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${fredoka.variable} ${nunito.variable} antialiased`}>
+    // Font variables live on <html> so the :root theme tokens
+    // (--font-heading / --font-body / --font-display) can resolve them.
+    <html lang="en" className={`${fredoka.variable} ${nunito.variable}`}>
+      <body className="antialiased">
         <a href="#main" className="sr-only-focusable">
           Skip to main content
         </a>
