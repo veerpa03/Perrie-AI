@@ -1,67 +1,91 @@
-import { DIRECTION_HYSTERESIS } from "./constants";
+import {
+  DIRECTION_HYSTERESIS,
+  TOP_SETTLE_MS,
+  ascentFracFor,
+  descentFracFor,
+} from "./constants";
 import type { SequenceName } from "./types";
 
+export interface TakeTarget {
+  /** Which take to show. */
+  seq: SequenceName;
+  /** Frame fraction (0..1) within that take. */
+  frac: number;
+  /** Matching frame fraction in the other take, kept warm for an instant switch. */
+  otherFrac: number;
+}
+
 /**
- * Tracks which frame sequence (ascent vs descent) should be considered
- * "active" as journey progress changes, with hysteresis so a few pixels
- * of jitter near a scroll direction change doesn't flap the sequence.
+ * Chooses the flight take for the current scroll position.
  *
- * Both sequences are indexed by the same normalized progress (0 = sky,
- * 1 = perched): descent frame = progress * (count-1); ascent frame =
- * (1-progress) * (count-1). See CHAPTERS in constants.ts for how the
- * chapter boundaries map onto the descent frames.
+ *  - Scrolling DOWN shows the DESCENT take; scrolling UP shows the ASCENT take
+ *    (played forward, so going back up is a real flight, not a rewind).
+ *  - A direction change only switches takes after sustained movement the other
+ *    way (DIRECTION_HYSTERESIS), so jitter and tiny reversals never flap.
+ *  - When the page comes to rest at the very top on the ascent take, it hands
+ *    back to the descent hero frame — the same stable pose the opening fly-in
+ *    lands on — instead of replaying anything.
  *
- * NOTE: the cinematic renderer (JourneyCanvas) scrubs the descent sequence
- * directly in both directions, so this controller is retained only for the
- * frameIndexFor helper below and as a reference for sequence switching.
+ * The canvas cross-fades whenever `seq` changes, so the switch between the two
+ * (different) takes never shows a hard jump.
  */
-export class JourneyController {
+export class DirectionalSequencer {
   private active: SequenceName = "descent";
-  private lastProgress = 0;
-  private accumulatedAgainstActive = 0;
+  private lastP = 0;
+  private against = 0;
+  private lastMoveAt = 0;
+  private started = false;
 
   get activeSequence(): SequenceName {
     return this.active;
   }
 
-  update(progress: number): SequenceName {
-    const delta = progress - this.lastProgress;
-    this.lastProgress = progress;
+  update(p: number, now: number): TakeTarget {
+    if (!this.started) {
+      this.started = true;
+      this.lastP = p;
+      this.lastMoveAt = now;
+    }
+    const dp = p - this.lastP;
+    this.lastP = p;
 
-    if (delta === 0) return this.active;
-
-    const movingDown = delta > 0;
-    const activeMatchesDirection =
-      (this.active === "descent" && movingDown) ||
-      (this.active === "ascent" && !movingDown);
-
-    if (activeMatchesDirection) {
-      this.accumulatedAgainstActive = 0;
-      return this.active;
+    if (Math.abs(dp) > 1e-5) {
+      this.lastMoveAt = now;
+      const down = dp > 0;
+      const matches =
+        (this.active === "descent" && down) || (this.active === "ascent" && !down);
+      if (matches) {
+        this.against = 0;
+      } else {
+        this.against += Math.abs(dp);
+        if (this.against >= DIRECTION_HYSTERESIS) {
+          this.active = down ? "descent" : "ascent";
+          this.against = 0;
+        }
+      }
     }
 
-    this.accumulatedAgainstActive += Math.abs(delta);
-    if (this.accumulatedAgainstActive >= DIRECTION_HYSTERESIS) {
-      this.active = movingDown ? "descent" : "ascent";
-      this.accumulatedAgainstActive = 0;
+    // At rest at the top on the ascent: settle back to the stable hero frame.
+    if (this.active === "ascent" && p < 0.02 && now - this.lastMoveAt > TOP_SETTLE_MS) {
+      this.active = "descent";
+      this.against = 0;
     }
-    return this.active;
+
+    const d = descentFracFor(p);
+    const a = ascentFracFor(p);
+    return this.active === "descent"
+      ? { seq: "descent", frac: d, otherFrac: a }
+      : { seq: "ascent", frac: a, otherFrac: d };
   }
 
   reset() {
     this.active = "descent";
-    this.lastProgress = 0;
-    this.accumulatedAgainstActive = 0;
+    this.against = 0;
+    this.started = false;
   }
 }
 
-export function frameIndexFor(
-  sequence: SequenceName,
-  progress: number,
-  count: number
-): number {
-  const p = Math.min(1, Math.max(0, progress));
-  const last = count - 1;
-  if (sequence === "descent") return Math.round(p * last);
-  return Math.round((1 - p) * last);
+export function frameIndexFor(frac: number, count: number): number {
+  const f = Math.min(1, Math.max(0, frac));
+  return Math.round(f * (count - 1));
 }

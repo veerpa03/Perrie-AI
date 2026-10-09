@@ -2,30 +2,42 @@
 
 import { forwardRef } from "react";
 import ClayIcon from "./ClayIcons";
-import type { ORBIT_FEATURES } from "@/lib/constants";
+import type { OrbitFeature } from "@/lib/constants";
 
-type Feature = (typeof ORBIT_FEATURES)[number];
+interface Props {
+  feature: OrbitFeature;
+  onOpen: () => void;
+  onHoverChange: (hovered: boolean) => void;
+}
 
 /**
- * A single orbiting feature: a standalone floating clay object (no card/tile),
- * like the reference. Purely presentational — PerrieOrbitSection sets this
- * element's size / transform / opacity / blur / z-index imperatively every
- * frame from the one authoritative rotation value. Marked aria-hidden; the
- * readable content lives in the synchronized caption and the sr-only list.
+ * One orbiting feature: a chunky floating 3D clay object that is also a real
+ * button — click (or Enter / Space) opens its gist card; hover or keyboard
+ * focus pauses the carousel so it is easy to hit. PerrieOrbitSection sets this
+ * element's size / transform / opacity / blur / z-index every frame from the
+ * one authoritative rotation value, so nothing else animates its transform.
  */
-const OrbitFeatureCard = forwardRef<HTMLDivElement, { feature: Feature }>(
-  function OrbitFeatureCard({ feature }, ref) {
-    return (
-      <div
-        ref={ref}
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/2 grid place-items-center"
-        style={{ willChange: "transform, opacity, filter" }}
-      >
-        <ClayIcon name={feature.icon} tone={feature.accent} className="h-full w-full" />
-      </div>
-    );
-  }
-);
+const OrbitFeatureCard = forwardRef<HTMLButtonElement, Props>(function OrbitFeatureCard(
+  { feature, onOpen, onHoverChange },
+  ref
+) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={onOpen}
+      onPointerEnter={() => onHoverChange(true)}
+      onPointerLeave={() => onHoverChange(false)}
+      onFocus={() => onHoverChange(true)}
+      onBlur={() => onHoverChange(false)}
+      aria-label={`Learn about: ${feature.label.replace(/\.$/, "")}`}
+      aria-haspopup="dialog"
+      className="focus-ring absolute left-1/2 top-1/2 grid cursor-pointer place-items-center rounded-[32px]"
+      style={{ willChange: "transform, opacity, filter" }}
+    >
+      <ClayIcon name={feature.icon} className="pointer-events-none h-full w-full" />
+    </button>
+  );
+});
 
 export default OrbitFeatureCard;

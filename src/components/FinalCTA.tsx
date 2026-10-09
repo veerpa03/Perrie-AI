@@ -35,9 +35,9 @@ export default function FinalCTA() {
             className="focus-ring relative overflow-hidden rounded-full px-8 py-3.5 text-sm font-semibold text-white sm:text-base"
             style={{
               fontFamily: "var(--font-body)",
-              background: "var(--color-teal-deep)",
+              background: "linear-gradient(100deg, #9277EA 0%, #EC6FA6 55%, #F0A23A 100%)",
               boxShadow:
-                "8px 12px 26px -10px rgba(34,109,104,0.55), inset -4px -4px 10px rgba(0,0,0,0.14), inset 5px 5px 12px rgba(255,255,255,0.28)",
+                "0 16px 30px -14px rgba(236,111,166,0.75), inset -4px -5px 10px rgba(0,0,0,0.14), inset 5px 5px 10px rgba(255,255,255,0.35)",
             }}
           >
             <span

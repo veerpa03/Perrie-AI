@@ -25,17 +25,21 @@ interface Props {
  * consistent when the visitor scrolls back up.
  */
 
-const FADE = 0.05;
+const FADE = 0.035;
 
+/**
+ * Sequential (not overlapping) chapter fades: a chapter fades OUT in the last
+ * FADE of its range and the next one fades IN in the first FADE of its range,
+ * so two headlines are never on screen together — even if scrolling stops
+ * exactly on a chapter boundary.
+ */
 function chapterOpacity(p: number, from: number, to: number): number {
   const hasEnter = from > 0.0001;
   const hasExit = to < 0.9999;
-  const lo = hasEnter ? from - FADE : -1;
-  const hi = hasExit ? to + FADE : 2;
-  if (p <= lo || p >= hi) return 0;
+  if (p < from || p > to) return 0;
   let o = 1;
-  if (hasEnter && p < from + FADE) o = Math.min(o, (p - (from - FADE)) / (2 * FADE));
-  if (hasExit && p > to - FADE) o = Math.min(o, (to + FADE - p) / (2 * FADE));
+  if (hasEnter && p < from + FADE) o = Math.min(o, (p - from) / FADE);
+  if (hasExit && p > to - FADE) o = Math.min(o, (to - p) / FADE);
   return Math.max(0, Math.min(1, o));
 }
 

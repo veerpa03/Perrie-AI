@@ -12,7 +12,9 @@ import { X } from "lucide-react";
 import DemoPlanner from "./DemoPlanner";
 
 interface DemoModalContextValue {
-  open: () => void;
+  /** Open the demo; optionally pre-select an example (e.g. "plan-day"). Safe to
+   *  pass directly as an onClick handler (the event argument is ignored). */
+  open: (initialId?: string | React.SyntheticEvent) => void;
   close: () => void;
   isOpen: boolean;
 }
@@ -27,8 +29,11 @@ export function DemoModalProvider({ children }: { children: React.ReactNode }) {
   const bgRef = useRef<HTMLDivElement>(null);
   const titleId = "demo-modal-title";
 
-  const open = useCallback(() => {
+  const [initialId, setInitialId] = useState<string | undefined>(undefined);
+
+  const open = useCallback((id?: string | React.SyntheticEvent) => {
     triggerRef.current = (document.activeElement as HTMLElement) ?? null;
+    setInitialId(typeof id === "string" ? id : undefined);
     setIsOpen(true);
   }, []);
 
@@ -146,7 +151,7 @@ export function DemoModalProvider({ children }: { children: React.ReactNode }) {
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <DemoPlanner />
+            <DemoPlanner initialId={initialId} />
             <p className="mt-4 text-center text-xs text-[color:var(--color-slate)]/50">
               Example workflows only — nothing here is scheduled, sent, or stored.
             </p>

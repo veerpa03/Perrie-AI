@@ -19,6 +19,7 @@ export default function AnimatedSignInButton() {
       <MotionLink
         href="/sign-in"
         aria-label="Sign in"
+        data-demo-return-focus
         className="focus-ring relative inline-flex items-center gap-2 overflow-hidden rounded-full px-5 py-2.5 text-sm font-semibold text-[color:var(--color-slate)]"
         style={{
           fontFamily: "var(--font-body)",
