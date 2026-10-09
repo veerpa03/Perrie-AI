@@ -9,14 +9,13 @@ import {
 } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { env } from "./env";
+import { dataDir, env } from "./env";
 
 /**
  * Secrets helpers: the app secret (signing + encryption), owner PIN hashing,
  * encrypted credential blobs and short-lived signed tokens.
  */
 
-const LOCAL_SECRET_FILE = path.join(process.cwd(), ".perrie", "secret");
 
 let cachedSecret: string | null = null;
 
@@ -32,12 +31,13 @@ export function appSecret(): string {
   if (env.isProduction()) {
     throw new Error("PERRIE_SECRET must be set in production (32+ random characters).");
   }
-  if (existsSync(LOCAL_SECRET_FILE)) {
-    cachedSecret = readFileSync(LOCAL_SECRET_FILE, "utf8").trim();
+  const file = path.join(dataDir(), "secret");
+  if (existsSync(file)) {
+    cachedSecret = readFileSync(file, "utf8").trim();
   } else {
-    mkdirSync(path.dirname(LOCAL_SECRET_FILE), { recursive: true });
+    mkdirSync(path.dirname(file), { recursive: true });
     cachedSecret = randomBytes(32).toString("base64url");
-    writeFileSync(LOCAL_SECRET_FILE, cachedSecret, { mode: 0o600 });
+    writeFileSync(file, cachedSecret, { mode: 0o600 });
   }
   return cachedSecret;
 }

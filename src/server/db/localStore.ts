@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { dataDir } from "../env";
 import type { Insert, ListOptions, Patch, Row, Store, TableName } from "./types";
 
 /**
@@ -11,19 +12,19 @@ import type { Insert, ListOptions, Patch, Row, Store, TableName } from "./types"
 
 type Data = { [K in TableName]?: Row<K>[] };
 
-const FILE = path.join(process.cwd(), ".perrie", "dev-store.json");
 
 export class LocalStore implements Store {
   readonly kind = "local" as const;
   private data: Data = {};
   private mtimeMs = -1;
+  private readonly file = path.join(dataDir(), "dev-store.json");
 
   private load() {
-    if (!existsSync(FILE)) return;
-    const m = statSync(FILE).mtimeMs;
+    if (!existsSync(this.file)) return;
+    const m = statSync(this.file).mtimeMs;
     if (m === this.mtimeMs) return;
     try {
-      this.data = JSON.parse(readFileSync(FILE, "utf8")) as Data;
+      this.data = JSON.parse(readFileSync(this.file, "utf8")) as Data;
       this.mtimeMs = m;
     } catch {
       // A torn read during another process's write: keep the last good copy.
@@ -31,11 +32,11 @@ export class LocalStore implements Store {
   }
 
   private save() {
-    mkdirSync(path.dirname(FILE), { recursive: true });
-    const tmp = `${FILE}.${process.pid}.tmp`;
+    mkdirSync(path.dirname(this.file), { recursive: true });
+    const tmp = `${this.file}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(this.data, null, 1));
-    renameSync(tmp, FILE);
-    this.mtimeMs = statSync(FILE).mtimeMs;
+    renameSync(tmp, this.file);
+    this.mtimeMs = statSync(this.file).mtimeMs;
   }
 
   private rows<T extends TableName>(table: T): Row<T>[] {

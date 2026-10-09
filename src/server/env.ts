@@ -12,6 +12,9 @@ const read = (key: string): string | undefined => {
 
 const trimSlash = (u: string) => u.replace(/\/+$/, "");
 
+/** Local data folder (dev store + generated secret). Gitignored. */
+export const dataDir = () => read("PERRIE_DATA_DIR") ?? `${process.cwd()}/.perrie`;
+
 export const env = {
   /** Public HTTPS URL Twilio can reach (ngrok / Cloudflare tunnel / deploy). */
   publicBaseUrl: () => {
