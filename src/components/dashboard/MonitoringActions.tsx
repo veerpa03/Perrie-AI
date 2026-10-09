@@ -1,11 +1,12 @@
 "use client";
 
 import { useActionState } from "react";
-import { CalendarClock, FlaskConical, Loader2, RefreshCw } from "lucide-react";
+import { CalendarClock, FlaskConical, HeartPulse, Loader2, RefreshCw } from "lucide-react";
 import {
   runGuardrailSimulationAction,
   scheduleDailyRunAction,
   setUpMonitoringAction,
+  setUpUptimeAction,
   type MonitoringActionState,
 } from "@/actions/monitoring";
 import { RainbowButton, SoftButton } from "./ui";
@@ -54,5 +55,20 @@ export function RunTestButtons({ canRun, hasSchedule }: { canRun: boolean; hasSc
       <p className="text-xs text-[color:var(--color-slate)]/55">Each run places real calls from Bluejay to Perrie&apos;s number.</p>
       <Status state={runState ?? schedState} />
     </div>
+  );
+}
+
+/** Opt-in, because every uptime check is a real call to Perrie's number. */
+export function UptimeButton({ enabled, canRun }: { enabled: boolean; canRun: boolean }) {
+  const [state, action, pending] = useActionState<MonitoringActionState, FormData>(() => setUpUptimeAction(), null);
+  return (
+    <form action={action} className="space-y-2">
+      <SoftButton type="submit" disabled={!canRun || enabled || pending}>
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <HeartPulse className="h-4 w-4" aria-hidden="true" />}
+        {enabled ? "Uptime monitor on" : "Turn on uptime monitor"}
+      </SoftButton>
+      {!enabled && <p className="text-xs text-[color:var(--color-slate)]/55">Bluejay calls Perrie every hour to check it answers — about 24 calls a day.</p>}
+      <Status state={state} />
+    </form>
   );
 }

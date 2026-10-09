@@ -84,10 +84,17 @@ export function buildEvaluatePayload(opts: {
   });
 
   const toolTurns = turns.filter((t) => t.speaker === "tool");
+  // With the owner, tools touch private data (calendar, contacts, messages):
+  // send only which tool ran and whether it worked, never its inputs/outputs.
+  const ownerCall = call.role === "owner";
   const tool_calls = toolTurns.map((t) => {
     const meta = t.meta as { tool?: string; ok?: boolean; blocked?: boolean; input?: unknown; output?: unknown };
+    const name = meta.tool ?? t.text.split(" ")[0];
+    if (ownerCall) {
+      return { name, start_offset_ms: offset(t.created_at), description: meta.ok === false ? `${name} failed` : `${name} ran` };
+    }
     return {
-      name: meta.tool ?? t.text.split(" ")[0],
+      name,
       start_offset_ms: offset(t.created_at),
       description: t.text.slice(0, 300),
       parameters: (trimJson(meta.input) as Record<string, unknown> | undefined) ?? undefined,
@@ -125,7 +132,7 @@ export function buildEvaluatePayload(opts: {
       {
         role: "USER",
         name: call.role === "owner" ? "Owner" : (call.counterpart_name ?? ROLE_LABEL[call.role] ?? "Caller"),
-        ...(otherNumber && call.direction !== "web" ? { phone_number: otherNumber } : {}),
+        ...(otherNumber && call.direction !== "web" && !ownerCall ? { phone_number: otherNumber } : {}),
         spoke_first: false,
       },
     ],

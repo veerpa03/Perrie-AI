@@ -14,7 +14,7 @@ process.env.TWILIO_PHONE_NUMBER = "+14155550100";
 process.env.PUBLIC_BASE_URL = "https://perrie.example";
 
 const { db, addTurn, logGuardrail, saveProfile } = await import("../src/server/db");
-const { setUpBluejayMonitoring } = await import("../src/server/monitoring/bluejay/setup");
+const { setUpBluejayMonitoring, setUpUptimeMonitor } = await import("../src/server/monitoring/bluejay/setup");
 const { queueCallEvaluation, processEvaluation, normalizeCallLog } = await import("../src/server/monitoring/bluejay/evaluations");
 const { queueGuardrailRun, refreshRun } = await import("../src/server/monitoring/bluejay/simulations");
 const { adaptArgs } = await import("../src/server/monitoring/bluejay/client");
@@ -35,12 +35,12 @@ await db().insert("profile_facts", { category: "Work", label: "Job", value: "Des
 
 const called = (name: string) => fake.state.calls.filter((c) => c.name === name);
 
-async function makeCall(direction: "inbound" | "web", speak = true) {
+async function makeCall(direction: "inbound" | "web", speak = true, role: "guest" | "owner" = "guest") {
   const start = Date.now() - 60_000;
   const call = await db().insert("calls", {
     twilio_call_sid: null,
     direction,
-    role: "guest",
+    role,
     from_number: "+14155550188",
     to_number: "+14155550100",
     counterpart_name: "Jordan",
@@ -102,8 +102,8 @@ test("setup registers Perrie, metrics, simulation and callers — without privat
   assert.equal(config.agent_id, "100");
   assert.equal(config.simulation_id, "500");
   assert.equal(Object.keys(config.digital_humans ?? {}).length, SCENARIOS.length);
-  const uptime = config.steps!.find((s) => s.key === "uptime")!;
-  assert.equal(uptime.ok, true);
+  assert.ok(!config.steps!.some((s) => s.key === "uptime"), "uptime monitor (real hourly calls) is opt-in, not part of setup");
+  assert.equal(called("create_uptime_monitor").length, 0);
   const alert = config.steps!.find((s) => s.key === "alert")!;
   assert.equal(alert.skipped, true, "alert needs a threshold Perrie can't know — must be skipped, not guessed");
   assert.match(alert.detail, /threshold/);
@@ -227,4 +227,47 @@ test("calls cut off by a restart are closed out, summarised and scored", async (
   // The summary step hands the call to Bluejay in the background.
   for (let i = 0; i < 50 && !(await db().get("call_evaluations", call.id)); i++) await new Promise((r) => setTimeout(r, 20));
   assert.ok(await db().get("call_evaluations", call.id), "queued for evaluation");
+});
+
+test("uptime monitor is created only on request, and only once", async () => {
+  const step = await setUpUptimeMonitor(60);
+  assert.equal(step.ok, true, step.detail);
+  assert.equal(called("create_uptime_monitor").length, 1);
+  assert.equal(called("create_uptime_monitor")[0].args.frequency_minutes, 60);
+  await setUpUptimeMonitor(60);
+  assert.equal(called("create_uptime_monitor").length, 1, "second click must not create another monitor");
+});
+
+test("your own calls stay private by default; with 'all' their tool data is left out", async () => {
+  delete process.env.BLUEJAY_EVALUATE;
+  const mine = await makeCall("inbound", true, "owner");
+  const row = await queueCallEvaluation(mine.id);
+  assert.equal(row?.status, "skipped");
+  assert.match(row?.error ?? "", /stay private/);
+
+  process.env.BLUEJAY_EVALUATE = "all";
+  const mine2 = await makeCall("inbound", true, "owner");
+  const before = called("evaluate").length;
+  await queueCallEvaluation(mine2.id);
+  assert.equal(called("evaluate").length, before + 1);
+  const body = called("evaluate").at(-1)!.args as { tool_calls: Record<string, unknown>[]; participants: Record<string, unknown>[] };
+  assert.ok(body.tool_calls.every((t) => !("parameters" in t) && !("output" in t)), "no calendar/contact data from owner calls");
+  assert.ok(!body.participants.some((p) => p.role === "USER" && p.phone_number), "owner's number not sent");
+  delete process.env.BLUEJAY_EVALUATE;
+});
+
+test("a queued retry respects a policy change before it is sent", async () => {
+  process.env.BLUEJAY_API_KEY = "wrong-key";
+  const call = await makeCall("inbound");
+  const row = await queueCallEvaluation(call.id);
+  assert.equal(row?.status, "pending");
+  process.env.BLUEJAY_API_KEY = "bj-test";
+  process.env.BLUEJAY_EVALUATE = "off";
+  await db().update("call_evaluations", row!.id, { next_check_at: new Date().toISOString() });
+  const before = called("evaluate").length;
+  await processEvaluation(row!.id);
+  const after = await db().get("call_evaluations", row!.id);
+  assert.equal(after?.status, "skipped");
+  assert.equal(called("evaluate").length, before, "nothing sent after the owner switched monitoring off");
+  delete process.env.BLUEJAY_EVALUATE;
 });

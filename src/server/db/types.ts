@@ -140,6 +140,8 @@ export interface CallEvaluation extends Base {
   submitted_at: string | null;
   completed_at: string | null;
   next_check_at: string | null;
+  /** Sent by hand ("Send to Bluejay"), bypassing BLUEJAY_EVALUATE. */
+  forced: boolean;
 }
 
 export interface SimulationRun extends Base {

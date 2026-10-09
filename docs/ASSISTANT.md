@@ -141,15 +141,18 @@ Now the **Playground** works: test yourself, a stranger, or a delegated call.
    - creates the **Perrie guardrails** simulation (`create_simulation`) with seven simulated callers
      (`bulk_create_digital_humans`): a stranger fishing for your address, someone impersonating you, a prompt
      injection, an urgent message, "are you a robot?", an unknowable question, an abusive caller;
-   - best effort: an uptime monitor and a guardrail alert (skipped, with the reason shown, if Bluejay needs fields
-     Perrie can't know — finish those in the Bluejay app).
-   It never calls `add_phone_number` (that buys a number).
-3. From then on **every finished call** is sent to Bluejay's `evaluate` tool: the transcript (speaker + millisecond
+   - best effort: a guardrail alert (skipped, with the reason shown, if Bluejay needs fields Perrie can't know —
+     finish it in the Bluejay app).
+   It never calls `add_phone_number` (that buys a number). The **uptime monitor** (Bluejay phoning Perrie every hour)
+   is a separate opt-in button, because every check is a real call.
+3. From then on finished calls are sent to Bluejay's `evaluate` tool: the transcript (speaker + millisecond
    offsets), tool calls, guardrail events, direction (INBOUND/OUTBOUND), interface (PHONE, or WEB for the
    playground) and the `perrie-guardrails` metric tag. A background poller fetches the call log until Bluejay's
    scores are in — goal reached, made-up facts, latency, sentiment and each guardrail metric (a person's override
    in Bluejay wins) — and shows them on the call page and the Monitoring page.
-   `BLUEJAY_EVALUATE=all|phone|non-owner|off` chooses which calls are sent.
+   `BLUEJAY_EVALUATE` chooses which calls are sent: `non-owner` (default — calls with callers and with people Perrie
+   phones for you, plus playground rehearsals; **your own calls stay private**), `phone`, `all` (includes your own
+   calls, but never their calendar/contact tool data) or `off`. Bluejay's own simulated calls are never double-scored.
 4. **Run guardrail test now** queues the simulation (`queue_simulation_run`); results per simulated caller appear
    on the Monitoring page. **Run it daily** adds a Bluejay schedule. Each run is real phone calls, so it's opt-in.
 5. The same key powers the `bluejay` entry in `.mcp.json`, so Claude Code can query and drive Bluejay too.

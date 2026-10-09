@@ -28,6 +28,8 @@ create table if not exists public.call_evaluations (
   raw jsonb,
   error text,
   attempts int not null default 0,
+  -- Sent by hand from the dashboard (bypasses BLUEJAY_EVALUATE).
+  forced boolean not null default false,
   submitted_at timestamptz,
   completed_at timestamptz,
   next_check_at timestamptz,

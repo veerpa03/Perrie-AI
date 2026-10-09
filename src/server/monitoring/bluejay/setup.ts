@@ -5,7 +5,14 @@ import { systemPrompt } from "../../agent/prompts";
 import { BluejayError, forgetBluejayTools, type BluejaySession, type JsonSchema, withBluejay } from "./client";
 import { GUARDRAIL_METRIC_TAG } from "./payload";
 import { GUARDRAIL_METRICS, SCENARIOS, SIMULATION_NAME, type Scenario } from "./scenarios";
-import { agentExternalId, getMonitoringConfig, saveMonitoringState, type MonitoringConfig, type SetupStep } from "./state";
+import {
+  agentExternalId,
+  getMonitoringConfig,
+  getMonitoringState,
+  saveMonitoringState,
+  type MonitoringConfig,
+  type SetupStep,
+} from "./state";
 
 /**
  * One-click (and re-runnable) Bluejay setup over MCP. Each step looks up
@@ -17,8 +24,11 @@ import { agentExternalId, getMonitoringConfig, saveMonitoringState, type Monitor
  *   2. Create Perrie's guardrail metrics (tagged "perrie-guardrails").
  *   3. Create the "Perrie guardrails" simulation.
  *   4. Add the adversarial / everyday simulated callers to it.
- *   5. Create an uptime monitor for the phone line   (best effort).
- *   6. Create an alert on guardrail failures          (best effort).
+ *   5. Create an alert on guardrail failures          (best effort).
+ *
+ * The uptime monitor (Bluejay phoning Perrie on a schedule) is NOT part of
+ * this: it places real calls around the clock, so it has its own opt-in
+ * button (setUpUptimeMonitor).
  *
  * Never sends private profile facts: the agent's knowledge base is only the
  * facts the owner marked shareable, and PII redaction is switched on.
@@ -394,28 +404,6 @@ export async function setUpBluejayMonitoring(): Promise<{ status: "ready" | "par
       await guarded("callers", "Simulated callers", () => stepDigitalHumans(s, config, steps));
       // Read-only: Bluejay's own numbers (never buys one).
       await stepCallerNumbers(s, config).catch(() => {});
-      const phone = agentPhoneNumber();
-      await guarded("uptime", "Uptime monitor", () =>
-        stepBestEffort(s, steps, {
-          key: "uptime",
-          label: "Uptime monitor",
-          list: "list_uptime_monitors",
-          create: "create_uptime_monitor",
-          name: UPTIME_NAME,
-          listKeys: ["uptime_monitors", "monitors"],
-          known: {
-            name: UPTIME_NAME,
-            description: "Calls Perrie's number on a schedule and checks it answers and greets correctly.",
-            ...(config.agent_id ? { agent_id: config.agent_id } : {}),
-            external_agent_id: config.agent_external_id,
-            ...(phone ? { phone_number: phone } : {}),
-            frequency_minutes: 60,
-            enabled: true,
-          },
-          existingId: config.uptime_monitor_id ?? null,
-          save: (id) => (config.uptime_monitor_id = id),
-        }),
-      );
       await guarded("alert", "Guardrail alert", () =>
         stepBestEffort(s, steps, {
           key: "alert",
@@ -447,4 +435,40 @@ export async function setUpBluejayMonitoring(): Promise<{ status: "ready" | "par
   const firstError = steps.find((st) => !st.ok && !st.skipped)?.detail ?? null;
   await saveMonitoringState(status, config, firstError);
   return { status, config };
+}
+
+/**
+ * Opt-in: a Bluejay uptime monitor that phones Perrie every `everyMinutes`
+ * and checks it answers. Each check is a real call.
+ */
+export async function setUpUptimeMonitor(everyMinutes = 60): Promise<SetupStep> {
+  const config: MonitoringConfig = { ...(await getMonitoringConfig()) };
+  const steps: SetupStep[] = [];
+  await withBluejay(async (s) => {
+    const phone = agentPhoneNumber();
+    await stepBestEffort(s, steps, {
+      key: "uptime",
+      label: "Uptime monitor",
+      list: "list_uptime_monitors",
+      create: "create_uptime_monitor",
+      name: UPTIME_NAME,
+      listKeys: ["uptime_monitors", "monitors"],
+      known: {
+        name: UPTIME_NAME,
+        description: `Calls Perrie's number every ${everyMinutes} minutes and checks it answers and greets correctly.`,
+        ...(config.agent_id ? { agent_id: config.agent_id } : {}),
+        external_agent_id: config.agent_external_id,
+        ...(phone ? { phone_number: phone } : {}),
+        frequency_minutes: everyMinutes,
+        enabled: true,
+      },
+      existingId: config.uptime_monitor_id ?? null,
+      save: (id) => (config.uptime_monitor_id = id),
+    });
+  });
+  const step = steps[0];
+  config.steps = [...(config.steps ?? []).filter((x) => x.key !== "uptime"), step];
+  const row = await getMonitoringState();
+  await saveMonitoringState(row?.status ?? "partial", config, row?.last_error ?? null);
+  return step;
 }

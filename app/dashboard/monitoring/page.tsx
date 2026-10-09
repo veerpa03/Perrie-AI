@@ -19,7 +19,7 @@ import { refreshEvaluationAction, refreshRunAction } from "@/actions/monitoring"
 import AutoRefresh from "@/components/dashboard/AutoRefresh";
 import BluejayRunner from "@/components/dashboard/BluejayRunner";
 import { EvaluationStatus, guardrailTally } from "@/components/dashboard/EvaluationView";
-import { RunTestButtons, SetupButton } from "@/components/dashboard/MonitoringActions";
+import { RunTestButtons, SetupButton, UptimeButton } from "@/components/dashboard/MonitoringActions";
 import ResultView from "@/components/dashboard/ResultView";
 import { RoleBadge } from "@/components/dashboard/badges";
 import { ACCENTS, ClayCard, EmptyState, IconBubble, PageHeader, Pill } from "@/components/dashboard/ui";
@@ -196,16 +196,29 @@ export default async function MonitoringPage() {
               <p className="mb-5 text-sm text-[color:var(--color-slate)]/70">
                 One click registers Perrie (as <code className="font-bold">{config.agent_external_id}</code>
                 {env.twilio()?.phoneNumber ? ` on ${prettyPhone(env.twilio()!.phoneNumber)}` : ""}) and creates its guardrail
-                metrics, test simulation and callers. Only facts you marked shareable are sent; PII redaction is on.
+                metrics, test simulation and callers. Its profile in Bluejay holds only the facts you marked shareable, with PII
+                redaction on.
               </p>
             )}
             <SetupButton label={state ? "Re-sync with Bluejay" : "Set up monitoring"} />
+            {state && (
+              <div className="mt-4">
+                <UptimeButton enabled={!!config.uptime_monitor_id} canRun={!!config.agent_id} />
+              </div>
+            )}
             {config.last_sync_at && (
               <p className="mt-3 text-xs text-[color:var(--color-slate)]/50">Last synced {timeAgo(config.last_sync_at)}.</p>
             )}
-            <p className="mt-3 text-xs text-[color:var(--color-slate)]/50">
-              Calls sent: <code className="font-bold">BLUEJAY_EVALUATE={evaluateMode()}</code>
-              {evaluateMode() === "all" ? " (phone calls + playground)" : ""}.
+            <p className="mt-3 text-xs leading-relaxed text-[color:var(--color-slate)]/55">
+              <code className="font-bold">BLUEJAY_EVALUATE={evaluateMode()}</code> —{" "}
+              {
+                {
+                  "non-owner": "calls with callers and with people Perrie phones for you (and playground rehearsals of them) are scored. Your own calls stay private.",
+                  phone: "real phone calls with other people are scored; your own calls and the playground are not.",
+                  all: "every call is scored, including your own (without calendar/contact data).",
+                  off: "no calls are sent.",
+                }[evaluateMode()]
+              }
             </p>
           </ClayCard>
 

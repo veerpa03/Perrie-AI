@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { queueCallEvaluation, processEvaluation } from "@/server/monitoring/bluejay/evaluations";
 import { scheduleDailyRun } from "@/server/monitoring/bluejay/schedule";
-import { setUpBluejayMonitoring } from "@/server/monitoring/bluejay/setup";
+import { setUpBluejayMonitoring, setUpUptimeMonitor } from "@/server/monitoring/bluejay/setup";
 import { queueGuardrailRun, refreshRun } from "@/server/monitoring/bluejay/simulations";
 import { db } from "@/server/db";
 
@@ -39,6 +39,16 @@ export async function scheduleDailyRunAction(): Promise<MonitoringActionState> {
     await scheduleDailyRun();
     revalidatePath("/dashboard/monitoring");
     return { ok: true, message: "The guardrail test will run every day at 09:00 (Bluejay schedule)." };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+export async function setUpUptimeAction(): Promise<MonitoringActionState> {
+  try {
+    const step = await setUpUptimeMonitor(60);
+    revalidatePath("/dashboard/monitoring");
+    return { ok: step.ok, message: step.detail };
   } catch (err) {
     return { ok: false, message: (err as Error).message };
   }

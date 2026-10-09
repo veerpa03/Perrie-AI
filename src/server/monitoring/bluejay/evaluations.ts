@@ -5,30 +5,34 @@ import { buildEvaluatePayload } from "./payload";
 import { getMonitoringConfig } from "./state";
 
 /**
- * Production-call monitoring: every finished call is sent to Bluejay's
- * `evaluate` tool, then its call log is polled until Bluejay's scores
+ * Production-call monitoring: finished calls are sent to Bluejay's
+ * `evaluate` tool, then the call log is polled until Bluejay's scores
  * (goal success, hallucination, latency, sentiment, Perrie's guardrail
  * metrics, ...) are ready and stored on the call.
  *
  * BLUEJAY_EVALUATE controls which calls are sent:
- *   all (default)  phone calls + playground conversations
- *   phone          real phone calls only
- *   non-owner      phone calls with callers / people Perrie phoned (not you)
- *   off            nothing
+ *   non-owner (default)  calls with other people — callers and people Perrie
+ *                        phones for you — plus playground rehearsals of them.
+ *                        Your own verified calls stay private.
+ *   phone                like non-owner, but real phone calls only
+ *   all                  also your own calls (tool data is still left out)
+ *   off                  nothing
  */
 
-export type EvaluateMode = "all" | "phone" | "non-owner" | "off";
+export type EvaluateMode = "non-owner" | "phone" | "all" | "off";
 
 export function evaluateMode(): EvaluateMode {
-  const v = (process.env.BLUEJAY_EVALUATE ?? "all").trim().toLowerCase();
-  return v === "phone" || v === "non-owner" || v === "off" ? v : "all";
+  const v = (process.env.BLUEJAY_EVALUATE ?? "non-owner").trim().toLowerCase();
+  return v === "phone" || v === "all" || v === "off" ? v : "non-owner";
 }
 
 export function shouldEvaluate(call: CallRecord): { ok: true } | { ok: false; reason: string } {
   const mode = evaluateMode();
-  if (mode === "off") return { ok: false, reason: "BLUEJAY_EVALUATE=off" };
-  if (call.direction === "web" && mode !== "all") return { ok: false, reason: "playground conversations aren't sent in this mode" };
-  if (mode === "non-owner" && call.role === "owner") return { ok: false, reason: "your own calls aren't sent (BLUEJAY_EVALUATE=non-owner)" };
+  if (mode === "off") return { ok: false, reason: "Not sent: BLUEJAY_EVALUATE=off." };
+  if (call.role === "owner" && mode !== "all") {
+    return { ok: false, reason: "Your own calls stay private (set BLUEJAY_EVALUATE=all to include them)." };
+  }
+  if (call.direction === "web" && mode === "phone") return { ok: false, reason: "Playground conversations aren't sent (BLUEJAY_EVALUATE=phone)." };
   return { ok: true };
 }
 
@@ -195,6 +199,7 @@ async function queueLocked(callId: string, opts: { force?: boolean }): Promise<C
     attempts: 0,
     submitted_at: null,
     completed_at: null,
+    forced: !!opts.force,
   };
   const row = existing
     ? await db().update("call_evaluations", existing.id, {
@@ -226,6 +231,13 @@ async function submit(row: CallEvaluation): Promise<void> {
   const call = await db().get("calls", row.call_id);
   if (!call) {
     await db().update("call_evaluations", row.id, { status: "failed", error: "The call no longer exists." });
+    return;
+  }
+  // The policy may have changed since this was queued (e.g. a retry after an
+  // outage): re-check it unless the owner sent this call by hand.
+  const allowed = row.forced ? ({ ok: true } as const) : shouldEvaluate(call);
+  if (!allowed.ok) {
+    await db().update("call_evaluations", row.id, { status: "skipped", error: allowed.reason, next_check_at: null });
     return;
   }
   const turns = await listTurns(call.id);
