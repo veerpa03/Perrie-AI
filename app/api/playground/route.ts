@@ -2,7 +2,7 @@ import { z } from "zod";
 import { LlmUnavailableError } from "@/server/agent/llm";
 import { AgentSession } from "@/server/agent/session";
 import { db, getProfile, listFacts, listTurns } from "@/server/db";
-import { finalizeCallOnce } from "@/server/voice/finalize";
+import { closeOutCall, finalizeCallOnce } from "@/server/voice/finalize";
 
 /**
  * Text playground for the phone agent: the same AgentSession, tools, role
@@ -29,7 +29,12 @@ const json = (data: unknown, status = 200) => Response.json(data, { status });
 
 function sweep() {
   const cutoff = Date.now() - 30 * 60_000;
-  for (const [id, s] of sessions) if (s.at < cutoff) sessions.delete(id);
+  for (const [id, s] of sessions) {
+    if (s.at >= cutoff) continue;
+    sessions.delete(id);
+    // Abandoned conversation: still give it a summary (and a Bluejay score).
+    void closeOutCall(id, "playground conversation abandoned").catch((err) => console.error("[playground] close-out failed", err));
+  }
 }
 
 export async function POST(req: Request) {

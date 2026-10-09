@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState } from "react";
 import { Loader2, Play } from "lucide-react";
 import { runBluejayToolAction, type BluejayRunState } from "@/actions/bluejay";
-import type { BluejayTool } from "@/server/integrations/bluejay";
+import type { BluejayTool } from "@/server/monitoring/bluejay/client";
 import ResultView from "./ResultView";
 import { FieldLabel, fieldClass, insetField, Pill, RainbowButton } from "./ui";
 

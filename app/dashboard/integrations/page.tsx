@@ -1,11 +1,13 @@
-import { Check, Code2, KeyRound, LogIn, LogOut, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, Code2, LogIn, LogOut, X } from "lucide-react";
 import { disconnectIntegrationAction } from "@/actions/integrations";
 import { integrationIcon } from "@/components/dashboard/integrationIcons";
 import { ACCENTS, ClayCard, IconBubble, PageHeader, Pill, SoftButton } from "@/components/dashboard/ui";
 import { env } from "@/server/env";
+import { APP_INTEGRATIONS } from "@/server/integrations";
 import { googleRedirectUri } from "@/server/integrations/google/oauth";
-import { INTEGRATIONS, integrationStatuses } from "@/server/integrations/registry";
-import type { AgentRole } from "@/server/integrations/types";
+import { providerStatuses } from "@/server/tools/registry";
+import type { AgentRole } from "@/server/tools/types";
 
 export const metadata = { title: "Integrations — Perrie" };
 
@@ -17,14 +19,13 @@ const ROLE_LABEL: Record<AgentRole, string> = {
 };
 
 const CATEGORY_LABEL: Record<string, string> = {
-  core: "Built in",
-  telephony: "Phone",
   calendar: "Calendar",
   contacts: "Contacts",
-  voice: "Voice",
-  intelligence: "Intelligence",
-  storage: "Storage",
-  quality: "Quality",
+  documents: "Documents",
+  spreadsheets: "Spreadsheets",
+  developer: "Developer",
+  communication: "Communication",
+  other: "App",
 };
 
 export default async function IntegrationsPage({
@@ -33,15 +34,15 @@ export default async function IntegrationsPage({
   searchParams: Promise<{ connected?: string; error?: string }>;
 }) {
   const sp = await searchParams;
-  const statuses = await integrationStatuses(true);
+  const statuses = await providerStatuses(true);
   const googleReady = !!env.google();
 
   return (
     <>
       <PageHeader
         eyebrow="Integrations"
-        title="What Perrie can reach"
-        subtitle="Each integration brings its own tools. Perrie only uses a tool when its integration is connected and the person it's acting for is allowed to use it."
+        title="Your apps"
+        subtitle="The apps Perrie can work with on your behalf. Each one brings its own tools, and Perrie only uses a tool when the app is connected and the person it's acting for is allowed to use it."
       />
 
       {(sp.connected || sp.error) && (
@@ -53,12 +54,12 @@ export default async function IntegrationsPage({
             color: sp.error ? ACCENTS.coral.ink : ACCENTS.mint.ink,
           }}
         >
-          {sp.error ? sp.error : `Connected ${INTEGRATIONS.find((i) => i.id === sp.connected)?.name ?? sp.connected}.`}
+          {sp.error ? sp.error : `Connected ${APP_INTEGRATIONS.find((i) => i.id === sp.connected)?.name ?? sp.connected}.`}
         </p>
       )}
 
       <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-3">
-        {INTEGRATIONS.map((i) => {
+        {APP_INTEGRATIONS.map((i) => {
           const st = statuses.get(i.id);
           const Icon = integrationIcon(i.icon);
           return (
@@ -87,40 +88,18 @@ export default async function IntegrationsPage({
               {st?.label && <p className="mt-2 truncate text-sm font-bold text-[color:var(--color-slate)]/80">{st.label}</p>}
               {!st?.connected && st?.hint && <p className="mt-2 text-xs text-[color:var(--color-slate)]/55">{st.hint}</p>}
 
-              {i.connect.kind === "env" && (
-                <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Environment variables">
-                  {i.connect.vars.map((v) => {
-                    const set = !!process.env[v]?.trim();
-                    return (
-                      <li key={v}>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold"
-                          style={{ background: set ? ACCENTS.mint.soft : "#F1EDE6", color: set ? ACCENTS.mint.ink : "#7A8796" }}
-                        >
-                          {set ? <Check className="h-3 w-3" aria-hidden="true" /> : <KeyRound className="h-3 w-3" aria-hidden="true" />}
-                          {v}
-                          <span className="sr-only">{set ? " is set" : " is missing"}</span>
-                        </span>
-                      </li>
-                    );
-                  })}
+              <div className="mt-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">What Perrie can do</p>
+                <ul className="mt-2 space-y-1.5">
+                  {i.tools.map((t) => (
+                    <li key={t.name} className="text-xs text-[color:var(--color-slate)]/70">
+                      <code className="font-bold text-[color:var(--color-slate)]">{t.name}</code>
+                      <span className="ml-1.5">for {t.roles.map((r) => ROLE_LABEL[r]).join(", ")}</span>
+                      {t.sideEffect && <span className="ml-1.5 font-bold text-[#B5403A]">· asks first</span>}
+                    </li>
+                  ))}
                 </ul>
-              )}
-
-              {i.tools.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">Tools</p>
-                  <ul className="mt-2 space-y-1.5">
-                    {i.tools.map((t) => (
-                      <li key={t.name} className="text-xs text-[color:var(--color-slate)]/70">
-                        <code className="font-bold text-[color:var(--color-slate)]">{t.name}</code>
-                        <span className="ml-1.5">for {t.roles.map((r) => ROLE_LABEL[r]).join(", ")}</span>
-                        {t.sideEffect && <span className="ml-1.5 font-bold text-[#B5403A]">· asks first</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              </div>
 
               <div className="mt-auto pt-5">
                 {i.connect.kind === "oauth" &&
@@ -153,27 +132,59 @@ export default async function IntegrationsPage({
         })}
       </div>
 
-      <ClayCard title="Adding more integrations" icon={Code2} accent="lilac" className="mt-8">
-        <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[color:var(--color-slate)]/75">
-          <li>
-            Create <code className="font-bold">src/server/integrations/&lt;name&gt;.ts</code> exporting an{" "}
-            <code className="font-bold">IntegrationDef</code>: a <code>status()</code> check and its tools (zod input, allowed
-            roles, whether it changes things).
-          </li>
-          <li>
-            Add it to <code className="font-bold">INTEGRATIONS</code> in <code>registry.ts</code>.
-          </li>
-          <li>
-            That&apos;s it — the phone agent, the task planner, the orchestrator and this page pick it up automatically, with
-            the same role checks, confirmations and logging.
-          </li>
-        </ol>
-        {googleReady && (
-          <p className="mt-4 text-xs text-[color:var(--color-slate)]/55">
-            Google OAuth redirect URI to register: <code className="font-bold">{googleRedirectUri()}</code>
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <ClayCard title="More apps plug in here" icon={Code2} accent="lilac">
+          <p className="-mt-1 mb-3 text-sm text-[color:var(--color-slate)]/70">
+            Excel, GitHub, Gmail, Notion… each new app is one file:
           </p>
-        )}
-      </ClayCard>
+          <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[color:var(--color-slate)]/75">
+            <li>
+              Create <code className="font-bold">src/server/integrations/&lt;app&gt;.ts</code> exporting an{" "}
+              <code className="font-bold">AppIntegration</code>: how to connect, a <code>status()</code> check, and its tools
+              (zod input, who may use them, whether they change things).
+            </li>
+            <li>
+              Add it to <code className="font-bold">APP_INTEGRATIONS</code> in <code>src/server/integrations/index.ts</code>.
+            </li>
+            <li>
+              The phone agent, task planner, orchestrator and this page pick it up — with the same role checks, confirmations and
+              logging.
+            </li>
+          </ol>
+          {googleReady && (
+            <p className="mt-4 text-xs text-[color:var(--color-slate)]/55">
+              Google OAuth redirect URI to register: <code className="font-bold">{googleRedirectUri()}</code>
+            </p>
+          )}
+        </ClayCard>
+        <ClayCard>
+          <p className="text-sm leading-relaxed text-[color:var(--color-slate)]/75">
+            Looking for Twilio, Deepgram, Claude or Supabase? They&apos;re the engine Perrie runs on, not apps — see the{" "}
+            <Link href="/dashboard/voice-stack" className="font-bold text-[#B83C76] hover:underline">
+              Voice stack
+            </Link>
+            . Call quality and testing with Bluejay live under{" "}
+            <Link href="/dashboard/monitoring" className="font-bold text-[#2A6FA8] hover:underline">
+              Monitoring
+            </Link>
+            .
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              href="/dashboard/voice-stack"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/70 hover:text-[color:var(--color-slate)]"
+            >
+              Voice stack <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/dashboard/monitoring"
+              className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/70 hover:text-[color:var(--color-slate)]"
+            >
+              Monitoring <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+        </ClayCard>
+      </div>
     </>
   );
 }

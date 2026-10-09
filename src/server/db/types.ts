@@ -120,6 +120,40 @@ export interface GuardrailEvent extends Base {
   meta: Json;
 }
 
+export type EvaluationStatus = "pending" | "submitted" | "evaluating" | "completed" | "failed" | "skipped";
+
+export interface MonitoringState extends Base {
+  status: "not_set_up" | "ready" | "partial" | "error";
+  config: Json;
+  last_error: string | null;
+}
+
+export interface CallEvaluation extends Base {
+  call_id: string;
+  provider: string;
+  status: EvaluationStatus;
+  external_call_id: string | null;
+  scores: Json | null;
+  raw: Json | null;
+  error: string | null;
+  attempts: number;
+  submitted_at: string | null;
+  completed_at: string | null;
+  next_check_at: string | null;
+}
+
+export interface SimulationRun extends Base {
+  provider: string;
+  simulation_id: string | null;
+  external_run_id: string | null;
+  status: "queued" | "running" | "completed" | "failed";
+  summary: Json | null;
+  results: Json | null;
+  error: string | null;
+  completed_at: string | null;
+  next_check_at: string | null;
+}
+
 export interface Tables {
   owner_profile: OwnerProfile;
   profile_facts: ProfileFact;
@@ -130,6 +164,9 @@ export interface Tables {
   call_turns: CallTurn;
   messages: MessageRecord;
   guardrail_events: GuardrailEvent;
+  monitoring_state: MonitoringState;
+  call_evaluations: CallEvaluation;
+  simulation_runs: SimulationRun;
 }
 
 export type TableName = keyof Tables;

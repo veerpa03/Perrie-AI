@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ActivitySquare,
+  AudioLines,
   Bot,
   LayoutGrid,
   ListChecks,
@@ -20,7 +21,8 @@ const NAV: { href: string; label: string; icon: LucideIcon; accent: Accent }[] =
   { href: "/dashboard/calls", label: "Calls", icon: PhoneCall, accent: "mint" },
   { href: "/dashboard/tasks", label: "Tasks", icon: ListChecks, accent: "amber" },
   { href: "/dashboard/integrations", label: "Integrations", icon: Plug, accent: "sky" },
-  { href: "/dashboard/voice-qa", label: "Voice QA", icon: ActivitySquare, accent: "coral" },
+  { href: "/dashboard/voice-stack", label: "Voice stack", icon: AudioLines, accent: "pink" },
+  { href: "/dashboard/monitoring", label: "Monitoring", icon: ActivitySquare, accent: "coral" },
   { href: "/dashboard/playground", label: "Playground", icon: Bot, accent: "lilac" },
 ];
 

@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { addTurn, logGuardrail } from "../db";
 import type { OwnerProfile, ProfileFact } from "../db/types";
-import { availableTools, executeTool, getTool, toAnthropicTools } from "../integrations/registry";
-import type { AnyTool } from "../integrations/types";
+import { availableTools, executeTool, getTool, toAnthropicTools } from "../tools/registry";
+import type { AnyTool } from "../tools/types";
 import { actionKey, buildLeakFilter, isAffirmative, looksLikeManipulation, type LeakFilter } from "./guardrails";
 import { llm, models } from "./llm";
 import { greetingFor, systemPrompt, type Channel, type ConversationRole, type PromptContext } from "./prompts";

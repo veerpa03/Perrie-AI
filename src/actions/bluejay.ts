@@ -1,6 +1,6 @@
 "use server";
 
-import { callBluejayTool, listBluejayTools, type JsonSchema } from "@/server/integrations/bluejay";
+import { callBluejayTool, listBluejayTools, type JsonSchema } from "@/server/monitoring/bluejay/client";
 
 export type BluejayRunState = { ok: boolean; tool: string; result: unknown; message?: string } | null;
 
@@ -24,7 +24,7 @@ function coerce(raw: string, schema: JsonSchema | undefined): unknown {
   }
 }
 
-/** Run one Bluejay MCP tool with arguments typed in on the Voice QA page. */
+/** Run one Bluejay MCP tool with arguments typed in on the Monitoring page ("Advanced"). */
 export async function runBluejayToolAction(_prev: BluejayRunState, form: FormData): Promise<BluejayRunState> {
   const name = String(form.get("__tool") ?? "");
   try {

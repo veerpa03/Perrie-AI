@@ -2,7 +2,8 @@ import { z } from "zod";
 import { db } from "../../db";
 import { env } from "../../env";
 import { humanRange, parseInZone, toZonedIso } from "../../time";
-import type { IntegrationDef, ToolDef } from "../types";
+import type { ToolDef } from "../../tools/types";
+import type { AppIntegration } from "../types";
 import { GOOGLE_SCOPES, googleFetch } from "./oauth";
 
 const API = "https://www.googleapis.com/calendar/v3";
@@ -49,7 +50,7 @@ async function busyBlocks(fromIso: string, toIso: string, tz: string) {
 
 const listEvents: ToolDef = {
   name: "calendar_list_events",
-  integration: ID,
+  provider: ID,
   description: "List the owner's Google Calendar events between two times. Use for 'what's on my calendar' questions.",
   input: z.object({ from: when, to: when, query: z.string().max(100).optional().describe("Optional text filter") }),
   roles: ["owner", "system"],
@@ -80,7 +81,7 @@ const freeSlotsInput = z.object({
 
 const findFreeSlots: ToolDef = {
   name: "calendar_find_free_slots",
-  integration: ID,
+  provider: ID,
   description:
     "Find open slots in the owner's calendar of a given length between two times, within working hours. Use before proposing or booking a time.",
   input: freeSlotsInput,
@@ -132,7 +133,7 @@ const createInput = z.object({
 
 const createEvent: ToolDef = {
   name: "calendar_create_event",
-  integration: ID,
+  provider: ID,
   description:
     "Create an event on the owner's Google Calendar. Refuses if it clashes with an existing event unless allow_conflict is true.",
   input: createInput,
@@ -172,7 +173,7 @@ const createEvent: ToolDef = {
   },
 };
 
-export const googleCalendar: IntegrationDef = {
+export const googleCalendar: AppIntegration = {
   id: ID,
   name: "Google Calendar",
   category: "calendar",

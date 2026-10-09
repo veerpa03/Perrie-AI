@@ -24,6 +24,8 @@ async function main() {
   // Imported after prepare() so modules see the loaded environment.
   const { handleMediaStream } = await import("../src/server/voice/mediaStream");
   const { resumeInterruptedTasks } = await import("../src/server/orchestrator/executor");
+  const { startMonitoringPoller } = await import("../src/server/monitoring/poller");
+  const { closeOutStaleCalls } = await import("../src/server/voice/finalize");
 
   const wss = new WebSocketServer({ noServer: true });
 
@@ -48,7 +50,14 @@ async function main() {
     if (process.env.PUBLIC_BASE_URL) console.log(`> Public URL for Twilio: ${process.env.PUBLIC_BASE_URL}`);
   });
 
-  void resumeInterruptedTasks().catch((err) => console.error("[orchestrator] resume failed", err));
+  // Mark interrupted task steps first, then close out calls cut off by the
+  // restart (which may hand call outcomes back to waiting tasks).
+  void resumeInterruptedTasks()
+    .catch((err) => console.error("[orchestrator] resume failed", err))
+    .then(() => closeOutStaleCalls())
+    .catch((err) => console.error("[voice] stale-call sweep failed", err));
+  // Bluejay monitoring: submit finished calls, collect scores and test results.
+  startMonitoringPoller();
 }
 
 main().catch((err) => {

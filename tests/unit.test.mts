@@ -6,7 +6,7 @@ import { isolate } from "./helpers";
 isolate();
 
 const { decryptJSON, encryptJSON, hashPin, signToken, verifyPin, verifyToken } = await import("../src/server/crypto");
-const { isValidTwilioSignature, isDialable } = await import("../src/server/integrations/twilio");
+const { isValidTwilioSignature, isDialable } = await import("../src/server/platform/twilio");
 const { normalizePhone, samePhone } = await import("../src/server/phone");
 const { parseInZone, toZonedIso } = await import("../src/server/time");
 const { actionKey, buildLeakFilter, isAffirmative, looksLikeManipulation } = await import("../src/server/agent/guardrails");
@@ -54,9 +54,10 @@ test("signed tokens: round trip, tamper and expiry", () => {
 });
 
 test("credential encryption and PIN hashing", () => {
-  const blob = encryptJSON({ refresh_token: "r1" });
-  assert.ok(!blob.includes("r1"));
-  assert.deepEqual(decryptJSON(blob), { refresh_token: "r1" });
+  const secret = "refresh-token-that-must-never-appear-in-plaintext";
+  const blob = encryptJSON({ refresh_token: secret });
+  assert.ok(!blob.includes("refresh-token") && !blob.includes(Buffer.from(secret).toString("base64url").slice(0, 16)));
+  assert.deepEqual(decryptJSON(blob), { refresh_token: secret });
   const h = hashPin("4821");
   assert.equal(verifyPin("4821", h), true);
   assert.equal(verifyPin("4822", h), false);
@@ -100,4 +101,21 @@ test("dashboard guard: only direct localhost requests without a password", () =>
   assert.equal(isPublicPath("/api/twilio/voice"), true);
   assert.equal(isPublicPath("/dashboard"), false);
   assert.equal(isPublicPath("/api/playground"), false);
+});
+
+test("Integrations are apps only; the voice stack and Bluejay are not integrations", async () => {
+  const { APP_INTEGRATIONS } = await import("../src/server/integrations");
+  const { PLATFORM_SERVICES } = await import("../src/server/platform/services");
+  const { TOOL_PROVIDERS, getTool } = await import("../src/server/tools/registry");
+  const appIds = APP_INTEGRATIONS.map((i) => i.id);
+  for (const infra of ["twilio", "deepgram", "anthropic", "claude", "supabase", "bluejay", "perrie", "telephony"]) {
+    assert.ok(!appIds.includes(infra), `${infra} must not be an app integration`);
+  }
+  assert.deepEqual(PLATFORM_SERVICES.map((s) => s.id).sort(), ["claude", "deepgram", "supabase", "twilio"]);
+  // Every tool still reachable, and owned by a registered provider.
+  for (const name of ["take_message", "end_call", "create_task", "phone_call", "send_sms", "calendar_create_event", "contacts_search"]) {
+    const t = getTool(name);
+    assert.ok(t, `${name} missing`);
+    assert.ok(TOOL_PROVIDERS.some((p) => p.id === t!.provider));
+  }
 });

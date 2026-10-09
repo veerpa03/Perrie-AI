@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { db, getProfile, listFacts, logGuardrail, ownerName, type TaskRecord, type TaskStep } from "../db";
 import { models, structured } from "../agent/llm";
-import { availableTools } from "../integrations/registry";
-import type { AnyTool } from "../integrations/types";
+import { availableTools } from "../tools/registry";
+import type { AnyTool } from "../tools/types";
 import { humanNow } from "../time";
 
 /**

@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowLeft,
+  Gauge,
+  RotateCw,
+  Send,
   CheckCircle2,
   CircleAlert,
   ClipboardList,
@@ -16,7 +19,11 @@ import AutoRefresh from "@/components/dashboard/AutoRefresh";
 import { CallStatusBadge, RoleBadge, SeverityBadge } from "@/components/dashboard/badges";
 import { ACCENTS, ClayCard, PageHeader, Pill } from "@/components/dashboard/ui";
 import { fmtDateTime, fmtDuration, fmtTime, fmtWallTime } from "@/lib/format";
+import { evaluateCallAction, refreshEvaluationAction } from "@/actions/monitoring";
+import { EvaluationStatus, ScoreSummary } from "@/components/dashboard/EvaluationView";
 import { db, getProfile, listTurns } from "@/server/db";
+import { bluejayConfigured } from "@/server/monitoring/bluejay/client";
+import type { EvalScores } from "@/server/monitoring/bluejay/evaluations";
 import { prettyPhone } from "@/server/phone";
 
 export const metadata = { title: "Call — Perrie" };
@@ -27,12 +34,15 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const call = await db().get("calls", id);
   if (!call) notFound();
-  const [profile, turns, guardrails, task] = await Promise.all([
+  const [profile, turns, guardrails, task, evals] = await Promise.all([
     getProfile(),
     listTurns(id),
     db().list("guardrail_events", { where: { call_id: id }, orderBy: "created_at" }),
     call.task_id ? db().get("tasks", call.task_id) : Promise.resolve(null),
+    db().list("call_evaluations", { where: { call_id: id }, limit: 1 }),
   ]);
+  const evaluation = evals[0] ?? null;
+  const monitoring = bluejayConfigured();
   const tz = profile?.timezone ?? "UTC";
   const assistant = profile?.assistant_name ?? "Perrie";
   const who =
@@ -47,7 +57,14 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <>
-      <AutoRefresh active={call.status === "in-progress" || (!!call.ended_at && !call.summary)} everyMs={3000} />
+      <AutoRefresh
+        active={
+          call.status === "in-progress" ||
+          (!!call.ended_at && !call.summary) ||
+          (!!evaluation && ["pending", "submitted", "evaluating"].includes(evaluation.status))
+        }
+        everyMs={4000}
+      />
       <Link
         href="/dashboard/calls"
         className="focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/55 hover:text-[color:var(--color-slate)]"
@@ -121,6 +138,52 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+          </ClayCard>
+
+          <ClayCard title="Bluejay check" icon={Gauge} accent="sky" action={evaluation ? <EvaluationStatus status={evaluation.status} /> : undefined}>
+            {evaluation?.status === "completed" && evaluation.scores ? (
+              <ScoreSummary scores={evaluation.scores as unknown as EvalScores} />
+            ) : evaluation ? (
+              <p className="text-sm text-[color:var(--color-slate)]/70">
+                {evaluation.error ??
+                  (evaluation.status === "skipped"
+                    ? "This call wasn't sent."
+                    : "Bluejay is scoring this call — results appear here automatically.")}
+              </p>
+            ) : (
+              <p className="text-sm text-[color:var(--color-slate)]/70">
+                {monitoring
+                  ? "Not sent to Bluejay yet."
+                  : "Connect Bluejay (Monitoring) to have every call scored for goal, made-up facts, latency and guardrails."}
+              </p>
+            )}
+            {monitoring && (
+              <div className="mt-4 flex flex-wrap gap-3">
+                {!!call.ended_at &&
+                  (!evaluation || evaluation.status === "failed" || evaluation.status === "skipped" || evaluation.status === "completed") && (
+                  <form action={evaluateCallAction}>
+                    <input type="hidden" name="call_id" value={call.id} />
+                    <button
+                      type="submit"
+                      className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[#2A6FA8] hover:underline"
+                    >
+                      <Send className="h-4 w-4" aria-hidden="true" /> {evaluation ? "Send again" : "Send to Bluejay"}
+                    </button>
+                  </form>
+                )}
+                {evaluation && ["pending", "submitted", "evaluating"].includes(evaluation.status) && (
+                  <form action={refreshEvaluationAction}>
+                    <input type="hidden" name="id" value={evaluation.id} />
+                    <button
+                      type="submit"
+                      className="focus-ring inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[#2A6FA8] hover:underline"
+                    >
+                      <RotateCw className="h-4 w-4" aria-hidden="true" /> Check now
+                    </button>
+                  </form>
+                )}
               </div>
             )}
           </ClayCard>

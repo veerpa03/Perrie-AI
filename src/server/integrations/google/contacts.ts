@@ -2,7 +2,8 @@ import { z } from "zod";
 import { db } from "../../db";
 import { env } from "../../env";
 import { digitsOnly, normalizePhone } from "../../phone";
-import type { IntegrationDef, ToolDef } from "../types";
+import type { ToolDef } from "../../tools/types";
+import type { AppIntegration } from "../types";
 import { GOOGLE_SCOPES, googleFetch } from "./oauth";
 
 const ID = "google_contacts";
@@ -61,7 +62,7 @@ export async function lookupContactByPhone(phone: string): Promise<ContactView |
 
 const contactsSearch: ToolDef = {
   name: "contacts_search",
-  integration: ID,
+  provider: ID,
   description:
     "Search the owner's Google Contacts by name, company, e-mail or number. Returns names, phone numbers (E.164) and e-mails. Never guess a number — look it up.",
   input: z.object({ query: z.string().min(1).max(100) }),
@@ -73,7 +74,7 @@ const contactsSearch: ToolDef = {
   },
 };
 
-export const googleContacts: IntegrationDef = {
+export const googleContacts: AppIntegration = {
   id: ID,
   name: "Google Contacts",
   category: "contacts",

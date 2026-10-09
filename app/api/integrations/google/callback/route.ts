@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { safeEqual } from "@/server/crypto";
 import { completeGoogleConnection, readGoogleState } from "@/server/integrations/google/oauth";
-import { invalidateIntegrationStatus } from "@/server/integrations/registry";
+import { invalidateProviderStatus } from "@/server/tools/registry";
 
 /** Google redirects here after consent: http://localhost:3000/api/integrations/google/callback */
 export async function GET(req: NextRequest) {
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   }
   try {
     await completeGoogleConnection(state.integration, code);
-    invalidateIntegrationStatus();
+    invalidateProviderStatus();
     back.searchParams.set("connected", state.integration);
   } catch (err) {
     back.searchParams.set("error", (err as Error).message);

@@ -7,7 +7,8 @@ import { StepStatusBadge, TaskStatusBadge } from "@/components/dashboard/badges"
 import { ACCENTS, ClayCard, PageHeader, Pill, RainbowButton, SoftButton } from "@/components/dashboard/ui";
 import { fmtDateTime } from "@/lib/format";
 import { db, getProfile, listSteps } from "@/server/db";
-import { getIntegration, getTool } from "@/server/integrations/registry";
+import { getAppIntegration } from "@/server/integrations";
+import { getProvider, getTool } from "@/server/tools/registry";
 
 export const metadata = { title: "Task — Perrie" };
 
@@ -113,9 +114,11 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
             <ol className="relative space-y-4">
               {steps.map((s, i) => {
                 const tool = getTool(s.tool);
-                const integ = tool ? getIntegration(tool.integration) : undefined;
+                const provider = tool ? getProvider(tool.provider) : undefined;
+                const app = tool ? getAppIntegration(tool.provider) : undefined;
+                const accent = app?.accent ?? (tool?.provider === "telephony" ? "coral" : "lilac");
                 const callId = (s.output as { call_id?: string } | null)?.call_id;
-                const a = ACCENTS[integ?.accent ?? "slate"];
+                const a = ACCENTS[accent];
                 return (
                   <li key={s.id} className="relative flex gap-4">
                     {i < steps.length - 1 && (
@@ -140,8 +143,8 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-bold text-[color:var(--color-slate)]">{s.title}</p>
                         <StepStatusBadge status={s.status} />
-                        <Pill tone={integ?.accent ?? "slate"}>
-                          {integ?.name ?? "Unknown"} · {s.tool}
+                        <Pill tone={accent}>
+                          {provider?.name ?? "Unknown"} · {s.tool}
                         </Pill>
                         {tool?.sideEffect && <Pill tone="coral">changes things</Pill>}
                       </div>

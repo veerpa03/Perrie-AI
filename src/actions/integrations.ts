@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { disconnectGoogle, isGoogleIntegration } from "@/server/integrations/google/oauth";
-import { invalidateIntegrationStatus } from "@/server/integrations/registry";
+import { invalidateProviderStatus } from "@/server/tools/registry";
 
 export async function disconnectIntegrationAction(form: FormData): Promise<void> {
   const id = String(form.get("id") ?? "");
   if (isGoogleIntegration(id)) await disconnectGoogle(id);
-  invalidateIntegrationStatus();
+  invalidateProviderStatus();
   revalidatePath("/dashboard", "layout");
 }

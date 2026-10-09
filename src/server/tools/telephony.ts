@@ -1,79 +1,14 @@
-import { createHmac } from "node:crypto";
 import { z } from "zod";
-import { safeEqual } from "../crypto";
 import { db, ownerName } from "../db";
 import { env } from "../env";
 import { normalizePhone } from "../phone";
-import type { IntegrationDef, ToolDef } from "./types";
+import { isDialable, startOutboundCall, twilioPost } from "../platform/twilio";
+import type { ToolDef, ToolProvider } from "./types";
 
-/**
- * Twilio over its REST API (no SDK): outbound calls, SMS and webhook
- * signature validation. Live audio runs over Media Streams (see voice/).
- */
+/** Built-in telephony capability: call someone / text someone for the owner. */
 
-const ID = "twilio";
+const ID = "telephony";
 const MAX_OUTBOUND_PER_HOUR = 10;
-
-async function twilioPost(path: string, params: URLSearchParams) {
-  const t = env.twilio();
-  if (!t) throw new Error("Twilio is not configured.");
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${t.accountSid}/${path}.json`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${t.accountSid}:${t.authToken}`).toString("base64")}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params,
-    signal: AbortSignal.timeout(15_000),
-  });
-  const json = (await res.json()) as Record<string, unknown>;
-  if (!res.ok) throw new Error(`Twilio ${res.status}: ${String(json.message ?? "request failed")}`);
-  return json;
-}
-
-/** X-Twilio-Signature check: HMAC-SHA1 over URL + sorted POST params. */
-export function isValidTwilioSignature(
-  url: string,
-  params: Record<string, string>,
-  signature: string | null,
-  authToken = env.twilio()?.authToken,
-): boolean {
-  if (!signature || !authToken) return false;
-  const data = url + Object.keys(params).sort().map((k) => k + params[k]).join("");
-  const expected = createHmac("sha1", authToken).update(Buffer.from(data, "utf8")).digest("base64");
-  return safeEqual(expected, signature);
-}
-
-/** Numbers Perrie must never dial on its own: emergency/short codes and premium-rate lines. */
-export function isDialable(e164: string): boolean {
-  const d = e164.replace(/\D/g, "");
-  if (d.length < 8) return false; // 911 / 112 / 999 and SMS short codes
-  if (/^1(900|976)/.test(d) || /^449/.test(d)) return false; // US / UK premium-rate
-  return true;
-}
-
-export async function startOutboundCall(callId: string, to: string): Promise<string> {
-  const t = env.twilio();
-  const base = env.publicBaseUrl();
-  if (!t) throw new Error("Twilio is not configured.");
-  if (!base) throw new Error("PUBLIC_BASE_URL is not set, so Twilio can't reach Perrie.");
-  const params = new URLSearchParams({
-    To: to,
-    From: t.phoneNumber,
-    Url: `${base}/api/twilio/voice?call_id=${encodeURIComponent(callId)}`,
-    Method: "POST",
-    StatusCallback: `${base}/api/twilio/status`,
-    StatusCallbackMethod: "POST",
-    Timeout: "30",
-  });
-  for (const e of ["initiated", "ringing", "answered", "completed"]) params.append("StatusCallbackEvent", e);
-  const json = await twilioPost("Calls", params);
-  return String(json.sid);
-}
-
-export async function hangUpCall(callSid: string): Promise<void> {
-  await twilioPost(`Calls/${callSid}`, new URLSearchParams({ Status: "completed" }));
-}
 
 const callInput = z.object({
   to_number: z.string().describe("E.164 number, e.g. +14155550123 — from contacts or given by the owner, never guessed."),
@@ -89,7 +24,7 @@ const callInput = z.object({
 
 const phoneCall: ToolDef = {
   name: "phone_call",
-  integration: ID,
+  provider: ID,
   description:
     "Phone someone on the owner's behalf with a clear mission. Perrie discloses it is an AI assistant, follows only the mission, and reports the outcome when the call ends.",
   input: callInput,
@@ -142,7 +77,7 @@ const smsInput = z.object({
 
 const sendSms: ToolDef = {
   name: "send_sms",
-  integration: ID,
+  provider: ID,
   description: "Send a text message on the owner's behalf. The text is signed as coming from the owner's assistant.",
   input: smsInput,
   roles: ["owner", "system"],
@@ -159,14 +94,10 @@ const sendSms: ToolDef = {
   },
 };
 
-export const twilio: IntegrationDef = {
+/** Phone calls + texts on the owner's behalf, available once Twilio is set up. */
+export const telephony: ToolProvider = {
   id: ID,
-  name: "Twilio",
-  category: "telephony",
-  description: "Your assistant's phone number: answers your calls, calls people for you, sends texts.",
-  accent: "coral",
-  icon: "phone",
-  connect: { kind: "env", vars: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "PUBLIC_BASE_URL"] },
+  name: "Phone (Twilio)",
   async status() {
     const t = env.twilio();
     if (!t) return { connected: false, hint: "Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER." };

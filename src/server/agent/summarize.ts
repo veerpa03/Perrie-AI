@@ -1,11 +1,13 @@
 import { db, getProfile, listTurns, ownerName } from "../db";
+import { bluejayConfigured } from "../monitoring/bluejay/client";
+import { queueCallEvaluation } from "../monitoring/bluejay/evaluations";
 import { completeAsyncStep } from "../orchestrator/executor";
 import { LlmUnavailableError, models, structured } from "./llm";
 
 /**
  * After a call: write a readable description + structured outcome from the
- * transcript alone, then (for calls placed by a task) report back to the
- * orchestrator so the task can continue.
+ * transcript alone, hand the call to Bluejay for monitoring, then (for calls
+ * placed by a task) report back to the orchestrator so the task can continue.
  */
 
 type Outcome = {
@@ -107,6 +109,12 @@ export async function finalizeCall(callId: string): Promise<void> {
       follow_ups: outcome.follow_ups ?? [],
     },
   });
+
+  // Monitoring: runs once per call (this function returns early once a
+  // summary exists) and never holds up the call or the task.
+  if (bluejayConfigured()) {
+    void queueCallEvaluation(callId).catch((err) => console.error("[monitoring] evaluate failed", err));
+  }
 
   if (call.task_step_id) {
     if (!callerSpoke) {

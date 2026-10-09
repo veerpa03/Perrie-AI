@@ -11,7 +11,7 @@ import {
   type TaskStep,
 } from "../db";
 import { llm, models } from "../agent/llm";
-import { executeTool, getTool, toAnthropicTools } from "../integrations/registry";
+import { executeTool, getTool, toAnthropicTools } from "../tools/registry";
 import { humanNow } from "../time";
 
 /**

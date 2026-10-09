@@ -1,6 +1,8 @@
 import Link from "next/link";
 import {
   ArrowRight,
+  AudioLines,
+  Gauge,
   Bot,
   Check,
   CircleDashed,
@@ -44,7 +46,13 @@ import {
   ownerName,
 } from "@/server/db";
 import { serviceStatus } from "@/server/env";
-import { INTEGRATIONS, integrationStatuses } from "@/server/integrations/registry";
+import { APP_INTEGRATIONS } from "@/server/integrations";
+import { PLATFORM_SERVICES } from "@/server/platform/services";
+import { providerStatuses } from "@/server/tools/registry";
+import { db } from "@/server/db";
+import { bluejayConfigured } from "@/server/monitoring/bluejay/client";
+import type { EvalScores } from "@/server/monitoring/bluejay/evaluations";
+import { guardrailTally } from "@/components/dashboard/EvaluationView";
 import { prettyPhone } from "@/server/phone";
 
 export const metadata = { title: "Overview — Perrie" };
@@ -72,15 +80,21 @@ function Stat({ icon, accent, label, value, href }: { icon: typeof PhoneCall; ac
 }
 
 export default async function OverviewPage() {
-  const [profile, facts, calls, tasks, messages, guardrails, statuses] = await Promise.all([
+  const [profile, facts, calls, tasks, messages, guardrails, statuses, evaluations, monitorState] = await Promise.all([
     getProfile(),
     listFacts(),
     listCalls(50),
     listTasks(20),
     listMessages(20),
     listGuardrails(30),
-    integrationStatuses(true),
+    providerStatuses(true),
+    db().list("call_evaluations", { orderBy: "created_at", ascending: false, limit: 50 }),
+    db().get("monitoring_state", "bluejay"),
   ]);
+  const scored = evaluations.filter((e) => e.status === "completed" && e.scores);
+  const tally = scored.map((e) => guardrailTally(e.scores as unknown as EvalScores));
+  const grPassed = tally.reduce((a, t) => a + t.passed, 0);
+  const grTotal = tally.reduce((a, t) => a + t.total, 0);
   const tz = profile?.timezone ?? "UTC";
   const name = ownerName(profile);
   const weekAgo = Date.now() - 7 * 86400_000;
@@ -111,7 +125,7 @@ export default async function OverviewPage() {
       hint: "Connect on Integrations",
       href: "/dashboard/integrations",
     },
-    { label: "Bluejay testing", done: svc.bluejay, hint: "BLUEJAY_API_KEY", href: "/dashboard/voice-qa" },
+    { label: "Bluejay monitoring", done: svc.bluejay, hint: "BLUEJAY_API_KEY", href: "/dashboard/monitoring" },
   ];
   const doneCount = checklist.filter((c) => c.done).length;
 
@@ -381,7 +395,79 @@ export default async function OverviewPage() {
           </ClayCard>
 
           <ClayCard
-            title="Integrations"
+            title="Voice stack"
+            icon={AudioLines}
+            accent="pink"
+            action={
+              <Link href="/dashboard/voice-stack" className="focus-ring rounded-full text-sm font-bold text-[#B83C76] hover:underline">
+                Details
+              </Link>
+            }
+          >
+            <ul className="grid grid-cols-2 gap-2.5">
+              {PLATFORM_SERVICES.map((svcDef) => {
+                const st = svcDef.status();
+                const Icon = integrationIcon(svcDef.icon);
+                const a = ACCENTS[svcDef.accent];
+                return (
+                  <li
+                    key={svcDef.id}
+                    className="flex items-center gap-2.5 rounded-2xl px-3 py-2.5"
+                    style={{ background: st.connected ? a.soft : "rgba(255,255,255,0.6)" }}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" style={{ color: st.connected ? a.ink : "#9AA5B1" }} aria-hidden="true" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-[color:var(--color-slate)]">{svcDef.name}</span>
+                      <span className="block text-[11px] font-semibold" style={{ color: st.connected ? a.ink : "#8794A1" }}>
+                        {svcDef.layer} · {st.connected ? "ready" : "not set up"}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </ClayCard>
+
+          <ClayCard
+            title="Monitoring"
+            icon={Gauge}
+            accent="coral"
+            action={
+              <Link href="/dashboard/monitoring" className="focus-ring rounded-full text-sm font-bold text-[#B5403A] hover:underline">
+                Open
+              </Link>
+            }
+          >
+            {!bluejayConfigured() ? (
+              <p className="text-sm text-[color:var(--color-slate)]/65">
+                Connect Bluejay to have every call scored and to test Perrie with simulated callers.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-2xl px-2 py-2.5" style={{ background: ACCENTS.coral.soft }}>
+                  <p className="font-display text-2xl" style={{ color: ACCENTS.coral.ink }}>
+                    {scored.length}
+                  </p>
+                  <p className="text-[11px] font-bold text-[color:var(--color-slate)]/55">calls scored</p>
+                </div>
+                <div className="rounded-2xl px-2 py-2.5" style={{ background: ACCENTS.mint.soft }}>
+                  <p className="font-display text-2xl" style={{ color: ACCENTS.mint.ink }}>
+                    {grTotal ? `${Math.round((grPassed / grTotal) * 100)}%` : "—"}
+                  </p>
+                  <p className="text-[11px] font-bold text-[color:var(--color-slate)]/55">guardrails passed</p>
+                </div>
+                <div className="rounded-2xl px-2 py-2.5" style={{ background: ACCENTS.sky.soft }}>
+                  <p className="text-sm font-bold" style={{ color: ACCENTS.sky.ink }}>
+                    {monitorState?.status === "ready" ? "On" : monitorState ? "Partly" : "Not set up"}
+                  </p>
+                  <p className="text-[11px] font-bold text-[color:var(--color-slate)]/55">Bluejay</p>
+                </div>
+              </div>
+            )}
+          </ClayCard>
+
+          <ClayCard
+            title="Your apps"
             icon={Plug}
             accent="sky"
             action={
@@ -391,7 +477,7 @@ export default async function OverviewPage() {
             }
           >
             <ul className="grid grid-cols-2 gap-2.5">
-              {INTEGRATIONS.map((i) => {
+              {APP_INTEGRATIONS.map((i) => {
                 const st = statuses.get(i.id);
                 const Icon = integrationIcon(i.icon);
                 const a = ACCENTS[i.accent];

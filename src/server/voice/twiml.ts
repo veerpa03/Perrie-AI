@@ -1,7 +1,7 @@
 import { signToken } from "../crypto";
 import { logGuardrail } from "../db";
 import { env } from "../env";
-import { isValidTwilioSignature } from "../integrations/twilio";
+import { isValidTwilioSignature } from "../platform/twilio";
 
 /** TwiML + webhook helpers for the /api/twilio/* route handlers. */
 
