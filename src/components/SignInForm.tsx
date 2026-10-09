@@ -9,8 +9,8 @@ const fieldStyle: React.CSSProperties = {
 };
 
 /**
- * Demo sign-in form. Clay inset fields; nothing is submitted or checked — the
- * button simply continues to the frontend dashboard preview.
+ * Placeholder sign-in form. Clay inset fields; nothing is submitted or checked —
+ * accounts aren't built yet, so the button simply opens the (local-only) dashboard.
  */
 export default function SignInForm() {
   return (
@@ -50,7 +50,7 @@ export default function SignInForm() {
             "0 16px 30px -14px rgba(236,111,166,0.75), inset -4px -5px 10px rgba(0,0,0,0.14), inset 5px 5px 10px rgba(255,255,255,0.35)",
         }}
       >
-        Continue to demo dashboard
+        Open my dashboard
         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
       </Link>
     </form>

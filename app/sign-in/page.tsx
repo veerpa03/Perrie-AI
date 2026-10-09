@@ -66,8 +66,8 @@ export default function SignInPage() {
           >
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#9277EA]" aria-hidden="true" />
             <span>
-              Frontend preview only. Authentication isn&apos;t connected yet — this form doesn&apos;t create or
-              check any account.
+              No accounts yet: this form doesn&apos;t create or check anything. Your dashboard runs on your own
+              machine and only opens locally (or with your dashboard password).
             </span>
           </div>
 
