@@ -18,22 +18,21 @@ export const SITE = {
 };
 
 /**
- * The cinematic journey is a single scrubbed frame sequence. Progress is one
- * normalized value: 0 = hero above the clouds, 1 = perched on the tree.
+ * The cinematic journey is driven by one normalized scroll progress p:
+ * 0 = hero above the clouds, 1 = perched on the tree.
  *
- * We scrub the DESCENT sequence (hero -> landing) and play it in reverse on
- * upward scroll. The ascent footage is a separate take and is not
- * frame-matched to the descent, so switching between the two mid-flight would
- * jump; reversible descent keeps the motion perfectly continuous in both
- * directions. See JourneyCanvas for the renderer and the handoff notes for
- * the asset limitation.
+ * Two real flight takes are used:
+ *   - scrolling DOWN plays the DESCENT frames (sky -> clouds -> city -> tree);
+ *   - scrolling UP plays the ASCENT frames forward (takeoff from the branch ->
+ *     past the skyline -> up through the clouds -> hovering above the cloud
+ *     sea), so going back up is a real flight, not a rewind.
+ * The two takes are different footage, so each scroll position is mapped to
+ * the frame with the same scene in each take (DESCENT is linear, ASCENT uses
+ * ASCENT_TRACK below), direction changes need sustained movement
+ * (DIRECTION_HYSTERESIS) before switching, and the canvas cross-fades between
+ * takes at the switch so there is no hard jump.
  *
- * Chapter `from`/`to` are normalized progress ranges, chosen by inspecting
- * the descent frames for the matching composition:
- *   hero     ~frame 0    (bird launching off a cloud, open sky to the right)
- *   clarity  ~frame 55   (wings-spread flight through the cloud layer)
- *   city     ~frame 220  (gliding over the city grid)
- *   landing  ~frame 344  (perched on the branch, skyline behind)
+ * Chapter `from`/`to` are normalized progress ranges matched to the scenes.
  */
 export const PRIMARY_SEQUENCE = "descent" as const;
 
@@ -125,6 +124,79 @@ export function chapterAt(progress: number): (typeof CHAPTERS)[number] {
 // gentler, more cinematic scrub per frame.
 export const JOURNEY_SCROLL_LENGTH_VH = 520;
 
+// Extra scroll at the end of the journey for the animated hand-off from the
+// tree landing into the carousel: a short settle, then pastel clay clouds rise
+// and fill the screen while the scene softly blurs (see CloudCurtain).
+export const TRANSITION = {
+  settleVh: 24,
+  curtainVh: 110,
+} as const;
+
+/** Splits the pinned journey section's raw scroll progress (0..1) into the
+ *  journey progress p and the curtain transition t (both 0..1). */
+export function splitJourneyProgress(raw: number) {
+  const journeyTravel = JOURNEY_SCROLL_LENGTH_VH - 100;
+  const total = journeyTravel + TRANSITION.settleVh + TRANSITION.curtainVh;
+  const r = Math.min(1, Math.max(0, raw)) * total;
+  const p = Math.min(1, r / journeyTravel);
+  const t = Math.min(1, Math.max(0, (r - journeyTravel - TRANSITION.settleVh) / TRANSITION.curtainVh));
+  return { p, t };
+}
+
+/** Fraction of the pinned travel at which the journey (p) reaches 1. */
+export const JOURNEY_PORTION =
+  (JOURNEY_SCROLL_LENGTH_VH - 100) /
+  (JOURNEY_SCROLL_LENGTH_VH - 100 + TRANSITION.settleVh + TRANSITION.curtainVh);
+
+/** Total height of the journey section (vh), including the transition tail. */
+export const JOURNEY_SECTION_VH =
+  JOURNEY_SCROLL_LENGTH_VH + TRANSITION.settleVh + TRANSITION.curtainVh;
+
+/**
+ * Scroll progress -> ASCENT frame fraction (frame / 359), matched by scene by
+ * inspecting both takes:
+ *   p 1.00 tree, perched           -> ascent   0 (perched on the branch)
+ *   p 0.85 landing on the branch   -> ascent  30 (taking off)
+ *   p 0.74 over the city           -> ascent  58 (climbing past the skyline)
+ *   p 0.60 city below              -> ascent  86 (skyline low, climbing)
+ *   p 0.46 clouds over the city    -> ascent 112 (bursting up through cloud)
+ *   p 0.33 diving into clouds      -> ascent 172 (among the clouds)
+ *   p 0.25 starting the dive       -> ascent 210 (front-facing among clouds)
+ *   p 0.12 over the cloud sea      -> ascent 262 (centred over the cloud sea)
+ *   p 0.00 hero                    -> ascent 330 (big hover above the clouds)
+ */
+export const ASCENT_TRACK = [
+  { p: 0.0, f: 330 / 359 },
+  { p: 0.12, f: 262 / 359 },
+  { p: 0.25, f: 210 / 359 },
+  { p: 0.33, f: 172 / 359 },
+  { p: 0.46, f: 112 / 359 },
+  { p: 0.6, f: 86 / 359 },
+  { p: 0.74, f: 58 / 359 },
+  { p: 0.85, f: 30 / 359 },
+  { p: 1.0, f: 0 },
+] as const;
+
+/** Scroll progress -> DESCENT frame fraction (after the fly-in). */
+export function descentFracFor(p: number) {
+  return HERO_FRAC + Math.min(1, Math.max(0, p)) * (1 - HERO_FRAC);
+}
+
+/** Scroll progress -> ASCENT frame fraction (scene-matched). */
+export function ascentFracFor(p: number) {
+  const x = Math.min(1, Math.max(0, p));
+  const t = ASCENT_TRACK;
+  for (let i = 0; i < t.length - 1; i++) {
+    const a = t[i];
+    const b = t[i + 1];
+    if (x >= a.p && x <= b.p) {
+      const k = b.p === a.p ? 0 : (x - a.p) / (b.p - a.p);
+      return a.f + (b.f - a.f) * k;
+    }
+  }
+  return t[t.length - 1].f;
+}
+
 // Cover-fit focal point (fraction of the frame) used when the viewport aspect
 // differs from the footage (16:9). Biased left so Perrie — who lives on the
 // left/centre of frame — is protected from the crop on wide/landscape
@@ -148,35 +220,62 @@ export const JOURNEY_FOCAL_TRACK = [
   { p: 1.0, x: 0.34, y: 0.52 },
 ] as const;
 
-export function focalAt(progress: number): { x: number; y: number } {
-  const p = Math.min(1, Math.max(0, progress));
-  const t = JOURNEY_FOCAL_TRACK;
-  for (let i = 0; i < t.length - 1; i++) {
-    const a = t[i];
-    const b = t[i + 1];
+/** Same idea for the ASCENT take (keyed by ascent frame fraction): Perrie
+ *  starts left on the branch, then climbs into the centre of frame. */
+export const ASCENT_FOCAL_TRACK = [
+  { p: 0.0, x: 0.22, y: 0.5 },
+  { p: 0.1, x: 0.3, y: 0.46 },
+  { p: 0.2, x: 0.42, y: 0.42 },
+  { p: 0.32, x: 0.52, y: 0.45 },
+  { p: 0.5, x: 0.55, y: 0.45 },
+  { p: 0.65, x: 0.5, y: 0.46 },
+  { p: 1.0, x: 0.5, y: 0.5 },
+] as const;
+
+type FocalTrack = ReadonlyArray<{ readonly p: number; readonly x: number; readonly y: number }>;
+
+function sampleTrack(track: FocalTrack, v: number): { x: number; y: number } {
+  const p = Math.min(1, Math.max(0, v));
+  for (let i = 0; i < track.length - 1; i++) {
+    const a = track[i];
+    const b = track[i + 1];
     if (p >= a.p && p <= b.p) {
       const f = b.p === a.p ? 0 : (p - a.p) / (b.p - a.p);
       return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f };
     }
   }
-  const last = t[t.length - 1];
+  const last = track[track.length - 1];
   return { x: last.x, y: last.y };
 }
 
-// Direction-switch hysteresis is retained for the controller but the primary
-// renderer scrubs a single sequence, so it is effectively a no-op guard.
-export const DIRECTION_HYSTERESIS = 0.012;
+/** Mobile cover-crop focal for a given take and frame fraction. */
+export function focalAt(seq: "descent" | "ascent", frac: number): { x: number; y: number } {
+  return sampleTrack(seq === "ascent" ? ASCENT_FOCAL_TRACK : JOURNEY_FOCAL_TRACK, frac);
+}
+
+// Direction-switch hysteresis (in scroll progress): how far you must keep
+// scrolling the other way before the take switches (descent <-> ascent).
+// Prevents flapping on small jitters and reversals.
+export const DIRECTION_HYSTERESIS = 0.01;
+
+// Cross-fade duration when switching takes, and how long the page must rest
+// near the very top before the ascent hands back to the stable hero frame.
+export const TAKE_CROSSFADE_MS = 380;
+export const TOP_SETTLE_MS = 420;
 
 // Exponential smoothing factor applied to raw scroll progress each frame
 // (0 = instant, 1 = frozen). Restrained smoothing, not scroll hijacking.
 export const PROGRESS_SMOOTHING = 0.16;
 
 export const FRAME_CACHE = {
-  // Max decoded frames kept resident per sequence.
-  maxDecoded: 96,
-  // Frames to eagerly preload around the current index.
-  preloadRadius: 8,
-  // Concurrent in-flight decodes.
+  // Max decoded frames kept resident per take (two takes are loaded).
+  maxDecoded: 64,
+  // Frames to eagerly preload around the current index of the active take.
+  preloadRadius: 7,
+  // Frames kept warm around the matching position in the standby take, so a
+  // direction change can switch instantly.
+  standbyRadius: 3,
+  // Concurrent in-flight decodes per take.
   concurrency: 4,
 };
 
@@ -278,71 +377,104 @@ export const STEPS = [
 ] as const;
 
 /**
- * Orbit carousel (redesign). Four product features rotate on a wide, gently
- * tilted elliptical orbit around the stationary hovering Perrie. One scroll-
- * derived rotation value is authoritative (see PerrieOrbitSection); cards
- * compute their screen position from their angle, so there is no competing
- * GSAP/Framer transform on the same property.
+ * Orbit carousel. Four product features float as chunky rainbow clay objects
+ * on a gently tilted ring all around the centred headline. The carousel turns
+ * on its own (time-based — one authoritative rotation value lives in
+ * PerrieOrbitSection) and pauses on hover/focus, while a feature card is open,
+ * off-screen, or for reduced motion. Clicking an object opens its gist card.
  *
- * Tuning lives in ORBIT below — swap radius/tilt/scroll length there.
+ * These are illustrative example workflows; nothing is connected yet.
  */
-export const ORBIT_HEADLINE = "A little help. All around you.";
+export const ORBIT_HEADLINE = ["A little help.", "All around you."] as const;
 
 export const ORBIT_FEATURES = [
   {
     id: "plan",
     icon: "calendar",
+    demoId: "plan-day",
     label: "Plan your day.",
     description: "Bring a little structure to your day.",
-    accent: "var(--color-powder)",
+    gist: "Tell Perrie what\u2019s on your plate and get a calm, time-blocked plan for the day \u2014 meetings, focused work and breaks laid out in one view.",
+    examples: [
+      "Fit a dentist visit around my 9am standup",
+      "Block two hours for focused work",
+      "Leave a buffer between back-to-back meetings",
+    ],
+    color: "#9B82EE",
+    glow: "#EDE6FF",
   },
   {
     id: "write",
     icon: "envelope",
+    demoId: "draft-message",
     label: "Draft a message.",
     description: "Give your next message a starting point.",
-    accent: "var(--color-mint)",
+    gist: "Turn a rough idea into a clear, friendly draft that you review, tweak and send yourself.",
+    examples: [
+      "Tell the team the launch moved to Monday",
+      "Thank a colleague for their help",
+      "Politely follow up on an unanswered email",
+    ],
+    color: "#3FBF9B",
+    glow: "#DDF7EE",
   },
   {
     id: "research",
     icon: "search",
+    demoId: "research",
     label: "Research a topic.",
     description: "Give your questions a clearer direction.",
-    accent: "var(--color-dusty)",
+    gist: "Get a quick, organised primer on a question so you know what matters and where to start.",
+    examples: [
+      "Compare how competitors price starter plans",
+      "Summarise the basics of a new topic",
+      "List the questions to ask before deciding",
+    ],
+    color: "#F0A23A",
+    glow: "#FFF0D2",
   },
   {
     id: "organize",
     icon: "notebook",
+    demoId: "organize-tasks",
     label: "Organize your tasks.",
     description: "Turn scattered tasks into a next step.",
-    accent: "var(--color-peach)",
+    gist: "Gather scattered to-dos into one prioritised list, grouped by project, with a clear next step.",
+    examples: [
+      "Collect sticky notes into one list",
+      "Flag what\u2019s due this week",
+      "Pick the one thing to do next",
+    ],
+    color: "#EC6FA6",
+    glow: "#FFE1EE",
   },
 ] as const;
 
 export type OrbitIcon = (typeof ORBIT_FEATURES)[number]["icon"];
+export type OrbitFeature = (typeof ORBIT_FEATURES)[number];
 
 export const ORBIT = {
-  // Scroll length of the orbit section, in viewport heights. Long enough to
-  // read all four features across one full rotation.
-  scrollLengthVh: 360,
-  // Smoothing applied to the scroll-derived rotation (0 = instant, 1 = frozen).
-  rotationSmoothing: 0.14,
-  // A gently tilted ellipse (radians) so the ring reads as 3D, like the
-  // reference — left side dips, right side lifts.
+  // Seconds for one full, automatic turn of the carousel.
+  secondsPerTurn: 26,
+  // How long the carousel holds a feature after a dot click before turning on.
+  resumeAfterMs: 2600,
+  // A gently tilted ellipse (radians): left side dips, right side lifts.
   tilt: -0.12,
-  // Responsive geometry: horizontal/vertical orbit radii, floating-icon size,
-  // and the ring's vertical offset from the stage centre (px). The bird sits
-  // at the centre; icons orbit on the ring.
+  // Responsive geometry (px): ring radii, clay-object size, ring offset from
+  // the stage centre. The ring is large enough that objects pass above,
+  // beside and below the centred headline without covering it.
   geometry: {
-    desktop: { radiusX: 392, radiusY: 82, iconSize: 128, verticalOffset: 12 },
-    tablet: { radiusX: 288, radiusY: 66, iconSize: 108, verticalOffset: 16 },
-    mobile: { radiusX: 150, radiusY: 52, iconSize: 84, verticalOffset: 40 },
+    desktop: { radiusX: 450, radiusY: 196, iconSize: 136, verticalOffset: 6 },
+    tablet: { radiusX: 330, radiusY: 172, iconSize: 112, verticalOffset: 6 },
+    mobile: { radiusX: 148, radiusY: 214, iconSize: 78, verticalOffset: 0 },
   },
-  // Depth → appearance mapping (depth = cos(angle), 1 = front, -1 = back).
-  scaleBack: 0.62,
-  scaleFront: 1.12,
-  opacityBack: 0.5,
-  maxBlurPx: 4,
+  // Depth -> appearance (depth = cos(angle): 1 = front, -1 = back).
+  scaleBack: 0.6,
+  scaleFront: 1.14,
+  opacityBack: 0.55,
+  maxBlurPx: 3,
+  // Extra scale on hover / keyboard focus.
+  hoverScale: 1.14,
 } as const;
 
 export const FAQ = [

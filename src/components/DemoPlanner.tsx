@@ -4,13 +4,17 @@ import { useId, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { DEMO_EXAMPLES } from "@/lib/constants";
 
+type ExampleId = (typeof DEMO_EXAMPLES)[number]["id"];
+
 interface Props {
   compact?: boolean;
+  /** Example to show first (falls back to the first example). */
+  initialId?: string;
 }
 
-export default function DemoPlanner({ compact = false }: Props) {
-  const [activeId, setActiveId] = useState<(typeof DEMO_EXAMPLES)[number]["id"]>(
-    DEMO_EXAMPLES[0].id
+export default function DemoPlanner({ compact = false, initialId }: Props) {
+  const [activeId, setActiveId] = useState<ExampleId>(
+    () => (DEMO_EXAMPLES.find((e) => e.id === initialId)?.id ?? DEMO_EXAMPLES[0].id) as ExampleId
   );
   const active = DEMO_EXAMPLES.find((e) => e.id === activeId) ?? DEMO_EXAMPLES[0];
   const groupId = useId();

@@ -28,6 +28,17 @@ export class FrameCache {
     this.tier = tier;
   }
 
+  /**
+   * Keep a small window decoded around `index` without treating it as the
+   * active request (used for the standby take, so a scroll-direction change
+   * can switch takes instantly).
+   */
+  warm(index: number, radius: number = FRAME_CACHE.standbyRadius) {
+    const clamped = Math.min(this.manifest.count - 1, Math.max(0, Math.round(index)));
+    this.lastIndex = clamped;
+    this.preloadAround(clamped, radius);
+  }
+
   get count() {
     return this.manifest.count;
   }
@@ -52,20 +63,23 @@ export class FrameCache {
     this.lastIndex = index;
     const clamped = Math.min(this.manifest.count - 1, Math.max(0, index));
     const cached = this.cache.get(clamped);
-    this.preloadAround(clamped);
+    this.preloadAround(clamped, FRAME_CACHE.preloadRadius);
     if (cached) return cached;
     if (this.isExhausted(clamped)) return undefined;
     return this.decode(clamped).catch(() => undefined);
   }
 
-  private preloadAround(center: number) {
-    const r = FRAME_CACHE.preloadRadius;
+  private preloadAround(center: number, r: number) {
     for (let offset = -r; offset <= r; offset++) {
       const idx = center + offset;
       if (idx < 0 || idx >= this.manifest.count) continue;
       if (this.cache.has(idx) || this.pending.has(idx) || this.isExhausted(idx)) continue;
       this.enqueue(idx);
     }
+    // Drop queued work that is now far from where we are, so a fast scroll
+    // never leaves a backlog of stale decodes.
+    const limit = FRAME_CACHE.preloadRadius * 3;
+    this.queue = this.queue.filter((i) => Math.abs(i - this.lastIndex) <= limit);
   }
 
   private enqueue(index: number) {
@@ -74,9 +88,32 @@ export class FrameCache {
     this.drain();
   }
 
+  /**
+   * Low-priority, never-pruned prefetch of a frame range (e.g. the opening
+   * fly-in). Drained only when no on-demand work is waiting.
+   */
+  prefetchRange(from: number, to: number) {
+    for (let i = Math.max(0, from); i <= Math.min(this.manifest.count - 1, to); i++) {
+      if (!this.cache.has(i) && !this.pending.has(i) && !this.prefetch.includes(i)) this.prefetch.push(i);
+    }
+    this.drain();
+  }
+
+  private prefetch: number[] = [];
+
   private drain() {
-    while (this.inFlight < FRAME_CACHE.concurrency && this.queue.length) {
-      const idx = this.queue.shift()!;
+    while (this.inFlight < FRAME_CACHE.concurrency && (this.queue.length || this.prefetch.length)) {
+      let idx: number;
+      if (this.queue.length) {
+        // Decode the queued frame closest to where we are first.
+        let best = 0;
+        for (let k = 1; k < this.queue.length; k++) {
+          if (Math.abs(this.queue[k] - this.lastIndex) < Math.abs(this.queue[best] - this.lastIndex)) best = k;
+        }
+        idx = this.queue.splice(best, 1)[0];
+      } else {
+        idx = this.prefetch.shift()!;
+      }
       if (this.cache.has(idx) || this.pending.has(idx) || this.isExhausted(idx)) continue;
       void this.decode(idx).catch(() => undefined);
     }
@@ -129,6 +166,7 @@ export class FrameCache {
     this.pending.clear();
     this.failed.clear();
     this.queue = [];
+    this.prefetch = [];
   }
 }
 
