@@ -180,14 +180,20 @@ was written — don't trust old guidance that says "no backend is connected."
   signed-in owner's own data.
 - **Content-Security-Policy**: set per-request in `middleware.ts` (not
   `next.config.ts`, which only holds the static headers) with a fresh nonce
-  each request — `script-src` is nonce + `strict-dynamic` (Next's own
-  inline/hydration scripts pick up the nonce automatically; `'unsafe-eval'`
-  is added only when `NODE_ENV !== "production"`, for Fast Refresh).
-  `style-src` keeps `'unsafe-inline'` on purpose — this codebase relies on
-  inline `style={{...}}` for the clay gradients/shadows throughout, which a
-  nonce can't cover. Verified live against Clerk sign-in, Google-connected
-  integrations, Bluejay, and a streaming playground chat with zero CSP
-  console violations.
+  each request — `script-src` is `'self' 'nonce-...'` plus the explicit
+  Clerk hosts (`'unsafe-eval'` is added only when `NODE_ENV !== "production"`,
+  for Fast Refresh). **No `'strict-dynamic'`** — it was tried first, but with
+  it present browsers ignore `'self'` entirely and only trust nonce'd
+  scripts, and Next's automatic nonce-injection into its own bootstrap
+  `<script src>` tags doesn't apply under this project's custom server. That
+  silently blocked every script in a real production deploy (Railway) —
+  hydration never ran, the page was stuck on the server-rendered
+  `ReducedMotionJourney` fallback with zero interactivity, no console error
+  logged. `'self'` alone is enough; don't reintroduce `'strict-dynamic'`
+  without first confirming script tags actually carry a `nonce` attribute in
+  the rendered production HTML. `style-src` keeps `'unsafe-inline'` on
+  purpose — this codebase relies on inline `style={{...}}` for the clay
+  gradients/shadows throughout, which a nonce can't cover.
 
 ## Conventions
 

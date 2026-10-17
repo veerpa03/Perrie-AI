@@ -30,9 +30,15 @@ function buildCsp(nonce: string) {
   // Next's dev-mode Fast Refresh runtime uses eval(); production builds
   // don't. Only relax script-src for that in development.
   const devEval = process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'";
+  // No 'strict-dynamic': with it, browsers ignore 'self' entirely and only
+  // trust nonce'd scripts, but Next's automatic nonce-injection into its own
+  // bootstrap <script src> tags doesn't apply here (custom server), which
+  // silently blocked every script and broke hydration in production. 'self'
+  // plus the explicit Clerk hosts is enough on its own — nonce is kept for
+  // defense-in-depth on any inline scripts, not as the sole trust anchor.
   return [
     `default-src 'self'`,
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://*.clerk.accounts.dev https://*.clerk.com${devEval}`,
+    `script-src 'self' 'nonce-${nonce}' https://*.clerk.accounts.dev https://*.clerk.com${devEval}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' blob: data: https://img.clerk.com https://*.googleusercontent.com`,
     `font-src 'self' data:`,
