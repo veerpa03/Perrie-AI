@@ -4,23 +4,24 @@ import { safeEqual } from "../crypto";
 import { db, ownerName } from "../db";
 import { env } from "../env";
 import { normalizePhone } from "../phone";
+import { getTwilioCredentials, saveTwilioCredentials, type TwilioCreds } from "./twilioCreds";
 import type { IntegrationDef, ToolDef } from "./types";
 
 /**
  * Twilio over its REST API (no SDK): outbound calls, SMS and webhook
  * signature validation. Live audio runs over Media Streams (see voice/).
+ * Each tenant brings their OWN Twilio account (see twilioCreds.ts) — there is
+ * no shared operator-level number.
  */
 
 const ID = "twilio";
 const MAX_OUTBOUND_PER_HOUR = 10;
 
-async function twilioPost(path: string, params: URLSearchParams) {
-  const t = env.twilio();
-  if (!t) throw new Error("Twilio is not configured.");
-  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${t.accountSid}/${path}.json`, {
+async function twilioPost(creds: TwilioCreds, path: string, params: URLSearchParams) {
+  const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${creds.accountSid}/${path}.json`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${Buffer.from(`${t.accountSid}:${t.authToken}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${creds.accountSid}:${creds.authToken}`).toString("base64")}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: params,
@@ -31,13 +32,8 @@ async function twilioPost(path: string, params: URLSearchParams) {
   return json;
 }
 
-/** X-Twilio-Signature check: HMAC-SHA1 over URL + sorted POST params. */
-export function isValidTwilioSignature(
-  url: string,
-  params: Record<string, string>,
-  signature: string | null,
-  authToken = env.twilio()?.authToken,
-): boolean {
+/** X-Twilio-Signature check: HMAC-SHA1 over URL + sorted POST params. Caller supplies the TENANT's auth token — there is no global default. */
+export function isValidTwilioSignature(url: string, params: Record<string, string>, signature: string | null, authToken: string | null | undefined): boolean {
   if (!signature || !authToken) return false;
   const data = url + Object.keys(params).sort().map((k) => k + params[k]).join("");
   const expected = createHmac("sha1", authToken).update(Buffer.from(data, "utf8")).digest("base64");
@@ -52,14 +48,12 @@ export function isDialable(e164: string): boolean {
   return true;
 }
 
-export async function startOutboundCall(callId: string, to: string): Promise<string> {
-  const t = env.twilio();
+export async function startOutboundCall(creds: TwilioCreds, callId: string, to: string): Promise<string> {
   const base = env.publicBaseUrl();
-  if (!t) throw new Error("Twilio is not configured.");
   if (!base) throw new Error("PUBLIC_BASE_URL is not set, so Twilio can't reach Perrie.");
   const params = new URLSearchParams({
     To: to,
-    From: t.phoneNumber,
+    From: creds.phoneNumber,
     Url: `${base}/api/twilio/voice?call_id=${encodeURIComponent(callId)}`,
     Method: "POST",
     StatusCallback: `${base}/api/twilio/status`,
@@ -67,12 +61,12 @@ export async function startOutboundCall(callId: string, to: string): Promise<str
     Timeout: "30",
   });
   for (const e of ["initiated", "ringing", "answered", "completed"]) params.append("StatusCallbackEvent", e);
-  const json = await twilioPost("Calls", params);
+  const json = await twilioPost(creds, "Calls", params);
   return String(json.sid);
 }
 
-export async function hangUpCall(callSid: string): Promise<void> {
-  await twilioPost(`Calls/${callSid}`, new URLSearchParams({ Status: "completed" }));
+export async function hangUpCall(creds: TwilioCreds, callSid: string): Promise<void> {
+  await twilioPost(creds, `Calls/${callSid}`, new URLSearchParams({ Status: "completed" }));
 }
 
 const callInput = z.object({
@@ -101,17 +95,26 @@ const phoneCall: ToolDef = {
     const to = normalizePhone(input.to_number);
     if (!to) throw new Error(`"${input.to_number}" isn't a valid international number.`);
     if (!isDialable(to)) throw new Error("Perrie won't place calls to emergency or short-code numbers.");
+    const creds = await getTwilioCredentials(ctx.userId);
+    if (!creds) throw new Error("Twilio isn't connected.");
     const hourAgo = Date.now() - 3600_000;
-    const recent = (await db().list("calls", { where: { direction: "outbound" }, orderBy: "created_at", ascending: false, limit: 50 }))
-      .filter((c) => new Date(c.created_at).getTime() > hourAgo);
+    const recent = (
+      await db().list("calls", {
+        where: { user_id: ctx.userId, direction: "outbound" },
+        orderBy: "created_at",
+        ascending: false,
+        limit: 50,
+      })
+    ).filter((c) => new Date(c.created_at).getTime() > hourAgo);
     if (recent.length >= MAX_OUTBOUND_PER_HOUR) {
       throw new Error(`Safety limit: at most ${MAX_OUTBOUND_PER_HOUR} outbound calls per hour.`);
     }
     const call = await db().insert("calls", {
+      user_id: ctx.userId,
       twilio_call_sid: null,
       direction: "outbound",
       role: "delegate",
-      from_number: env.twilio()?.phoneNumber ?? null,
+      from_number: creds.phoneNumber,
       to_number: to,
       counterpart_name: input.contact_name,
       status: "queued",
@@ -125,7 +128,7 @@ const phoneCall: ToolDef = {
       duration_seconds: null,
     });
     try {
-      const sid = await startOutboundCall(call.id, to);
+      const sid = await startOutboundCall(creds, call.id, to);
       await db().update("calls", call.id, { twilio_call_sid: sid, status: "dialing" });
     } catch (err) {
       await db().update("calls", call.id, { status: "failed", summary: (err as Error).message });
@@ -149,29 +152,50 @@ const sendSms: ToolDef = {
   sideEffect: true,
   describe: (i: z.infer<typeof smsInput>) => `text ${i.to_number}: "${i.body}"`,
   async run(input: z.infer<typeof smsInput>, ctx) {
-    const t = env.twilio();
-    if (!t) throw new Error("Twilio is not configured.");
+    const creds = await getTwilioCredentials(ctx.userId);
+    if (!creds) throw new Error("Twilio isn't connected.");
     const to = normalizePhone(input.to_number);
     if (!to || !isDialable(to)) throw new Error(`"${input.to_number}" isn't a valid number to text.`);
     const signed = `${input.body}\n— ${ctx.profile?.assistant_name ?? "Perrie"}, ${ownerName(ctx.profile)}'s assistant`;
-    const json = await twilioPost("Messages", new URLSearchParams({ To: to, From: t.phoneNumber, Body: signed }));
+    const json = await twilioPost(creds, "Messages", new URLSearchParams({ To: to, From: creds.phoneNumber, Body: signed }));
     return { sent: true, sid: json.sid };
   },
 };
+
+const connectInput = z.object({
+  account_sid: z.string().trim().min(1, "Required."),
+  auth_token: z.string().trim().min(1, "Required."),
+  phone_number: z.string().trim().min(1, "Required."),
+});
+
+/** Called by the dashboard's Twilio credentials form. */
+export async function connectTwilio(userId: string, raw: Record<string, unknown>): Promise<void> {
+  const v = connectInput.parse(raw);
+  const phoneNumber = normalizePhone(v.phone_number);
+  if (!phoneNumber) throw new Error(`"${v.phone_number}" isn't a full international number (e.g. +14155550123).`);
+  await saveTwilioCredentials(userId, { accountSid: v.account_sid, authToken: v.auth_token, phoneNumber });
+}
 
 export const twilio: IntegrationDef = {
   id: ID,
   name: "Twilio",
   category: "telephony",
-  description: "Your assistant's phone number: answers your calls, calls people for you, sends texts.",
+  description: "Your own Twilio account: answers your calls, calls people for you, sends texts. Bring your own account SID, auth token and number.",
   accent: "coral",
   icon: "phone",
-  connect: { kind: "env", vars: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER", "PUBLIC_BASE_URL"] },
-  async status() {
-    const t = env.twilio();
-    if (!t) return { connected: false, hint: "Add TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN and TWILIO_PHONE_NUMBER." };
-    if (!env.publicBaseUrl()) return { connected: false, label: t.phoneNumber, hint: "Set PUBLIC_BASE_URL so Twilio can reach Perrie." };
-    return { connected: true, label: t.phoneNumber };
+  connect: {
+    kind: "credentials",
+    fields: [
+      { name: "account_sid", label: "Account SID", placeholder: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" },
+      { name: "auth_token", label: "Auth token", secret: true },
+      { name: "phone_number", label: "Phone number", placeholder: "+14155550123" },
+    ],
+  },
+  async status(userId: string) {
+    if (!env.publicBaseUrl()) return { connected: false, hint: "PUBLIC_BASE_URL isn't set — ask the site operator to configure it." };
+    const creds = await getTwilioCredentials(userId);
+    if (!creds) return { connected: false, hint: "Connect your own Twilio account SID, auth token and phone number." };
+    return { connected: true, label: creds.phoneNumber };
   },
   tools: [phoneCall, sendSms],
 };

@@ -46,10 +46,11 @@ const NOT_REACHED = new Set(["no-answer", "busy", "failed", "canceled"]);
 export async function finalizeCall(callId: string): Promise<void> {
   const call = await db().get("calls", callId);
   if (!call || call.summary) return;
-  const turns = await listTurns(callId);
+  if (!call.user_id) return;
+  const turns = await listTurns(call.user_id, callId);
   const spoken = turns.filter((t) => t.speaker === "caller" || t.speaker === "agent");
   const callerSpoke = turns.some((t) => t.speaker === "caller");
-  const profile = await getProfile();
+  const profile = await getProfile(call.user_id);
   const name = ownerName(profile);
   const who = call.counterpart_name ?? call.from_number ?? call.to_number ?? "the caller";
 

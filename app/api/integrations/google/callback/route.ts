@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
     return done(NextResponse.redirect(back));
   }
   try {
-    await completeGoogleConnection(state.integration, code);
-    invalidateIntegrationStatus();
+    await completeGoogleConnection(state.userId, state.integration, code);
+    invalidateIntegrationStatus(state.userId);
     back.searchParams.set("connected", state.integration);
   } catch (err) {
     back.searchParams.set("error", (err as Error).message);

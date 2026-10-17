@@ -26,8 +26,8 @@ export default function DemoPlanner({ compact = false, initialId }: Props) {
       }`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/50">
-          Frontend preview · not connected to a live backend
+        <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/75">
+          Sample conversation
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export default function DemoPlanner({ compact = false, initialId }: Props) {
         className="space-y-4"
       >
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/50">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/75">
             You ask
           </p>
           <p className="mt-1 rounded-xl bg-[color:var(--color-sky)] px-4 py-3 text-sm leading-relaxed text-[color:var(--color-slate)]">
@@ -70,7 +70,7 @@ export default function DemoPlanner({ compact = false, initialId }: Props) {
           </p>
         </div>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/50">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[color:var(--color-slate)]/75">
             Perrie proposes
           </p>
           <ul className="mt-1 space-y-1.5">

@@ -7,5 +7,13 @@ out
 *.tsbuildinfo
 next-env.d.ts
 
+# Google OAuth client secret files downloaded from Cloud Console — never commit
+client_secret_*.json
+
 # Perrie local dev data (dev store + generated secret)
 .perrie/
+
+# Reference-only source footage for the frame pipeline (see
+# scripts/process_frames.py) — not shipped, ~1.3GB, regenerate public/frames/
+# from these locally if you ever need to; never commit them.
+References/

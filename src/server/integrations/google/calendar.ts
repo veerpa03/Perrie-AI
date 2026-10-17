@@ -38,8 +38,9 @@ function eventView(e: GEvent, tz: string) {
   };
 }
 
-async function busyBlocks(fromIso: string, toIso: string, tz: string) {
+async function busyBlocks(userId: string, fromIso: string, toIso: string, tz: string) {
   const fb = await googleFetch<{ calendars: Record<string, { busy: { start: string; end: string }[] }> }>(
+    userId,
     ID,
     `${API}/freeBusy`,
     { method: "POST", body: JSON.stringify({ timeMin: fromIso, timeMax: toIso, timeZone: tz, items: [{ id: "primary" }] }) },
@@ -51,10 +52,10 @@ const listEvents: ToolDef = {
   name: "calendar_list_events",
   integration: ID,
   description: "List the owner's Google Calendar events between two times. Use for 'what's on my calendar' questions.",
-  input: z.object({ from: when, to: when, query: z.string().max(100).optional().describe("Optional text filter") }),
+  input: z.object({ from: when, to: when, query: z.string().max(100).nullable().optional().describe("Optional text filter") }),
   roles: ["owner", "system"],
   sideEffect: false,
-  async run(input: { from: string; to: string; query?: string }, ctx) {
+  async run(input: { from: string; to: string; query?: string | null }, ctx) {
     const params = new URLSearchParams({
       timeMin: parseInZone(input.from, ctx.timezone).toISOString(),
       timeMax: parseInZone(input.to, ctx.timezone).toISOString(),
@@ -63,7 +64,7 @@ const listEvents: ToolDef = {
       maxResults: "25",
     });
     if (input.query) params.set("q", input.query);
-    const res = await googleFetch<{ items?: GEvent[] }>(ID, `${API}/calendars/primary/events?${params}`);
+    const res = await googleFetch<{ items?: GEvent[] }>(ctx.userId, ID, `${API}/calendars/primary/events?${params}`);
     const events = (res.items ?? []).map((e) => eventView(e, ctx.timezone));
     return { count: events.length, events };
   },
@@ -91,7 +92,7 @@ const findFreeSlots: ToolDef = {
     const from = new Date(Math.max(parseInZone(input.from, tz).getTime(), Date.now()));
     const to = parseInZone(input.to, tz);
     if (to <= from) return { slots: [], note: "The window is in the past or empty." };
-    const busy = await busyBlocks(from.toISOString(), to.toISOString(), tz);
+    const busy = await busyBlocks(ctx.userId, from.toISOString(), to.toISOString(), tz);
     const step = 30 * 60_000;
     const dur = input.duration_minutes * 60_000;
     const slots: { start: string; end: string; when: string }[] = [];
@@ -122,11 +123,15 @@ const findFreeSlots: ToolDef = {
 const createInput = z.object({
   title: z.string().min(1).max(200),
   start: when,
-  end: when.optional(),
-  duration_minutes: z.number().int().min(5).max(720).optional(),
-  description: z.string().max(2000).optional(),
-  location: z.string().max(300).optional(),
-  attendee_emails: z.array(z.email()).max(20).optional(),
+  // .nullable() alongside .optional(): Groq/Llama tool-calling often fills every
+  // property and uses null for ones it has no value for, instead of omitting
+  // them — a plain .optional() schema (type without "null") then fails Groq's
+  // own argument validation before the call even reaches us.
+  end: when.nullable().optional(),
+  duration_minutes: z.number().int().min(5).max(720).nullable().optional(),
+  description: z.string().max(2000).nullable().optional(),
+  location: z.string().max(300).nullable().optional(),
+  attendee_emails: z.array(z.email()).max(20).nullable().optional(),
   allow_conflict: z.boolean().default(false).describe("Only true if the owner explicitly accepted a clash."),
 });
 
@@ -147,7 +152,7 @@ const createEvent: ToolDef = {
       : new Date(start.getTime() + (input.duration_minutes ?? 30) * 60_000);
     if (end <= start) throw new Error("The event must end after it starts.");
     if (!input.allow_conflict) {
-      const clashes = await busyBlocks(start.toISOString(), end.toISOString(), tz);
+      const clashes = await busyBlocks(ctx.userId, start.toISOString(), end.toISOString(), tz);
       if (clashes.length) {
         return {
           created: false,
@@ -157,7 +162,7 @@ const createEvent: ToolDef = {
       }
     }
     const params = new URLSearchParams({ sendUpdates: input.attendee_emails?.length ? "all" : "none" });
-    const ev = await googleFetch<GEvent>(ID, `${API}/calendars/primary/events?${params}`, {
+    const ev = await googleFetch<GEvent>(ctx.userId, ID, `${API}/calendars/primary/events?${params}`, {
       method: "POST",
       body: JSON.stringify({
         summary: input.title,
@@ -180,9 +185,9 @@ export const googleCalendar: IntegrationDef = {
   accent: "sky",
   icon: "calendar",
   connect: { kind: "oauth", provider: "google", scopes: GOOGLE_SCOPES.google_calendar },
-  async status() {
+  async status(userId: string) {
     if (!env.google()) return { connected: false, hint: "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." };
-    const rec = await db().get("integrations", ID);
+    const [rec] = await db().list("integrations", { where: { user_id: userId, integration: ID }, limit: 1 });
     if (rec?.status === "error") return { connected: false, label: rec.account_label, error: "Reconnect needed." };
     return rec?.status === "connected"
       ? { connected: true, label: rec.account_label }

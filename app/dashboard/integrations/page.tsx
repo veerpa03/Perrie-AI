@@ -1,9 +1,10 @@
-import { Check, Code2, KeyRound, LogIn, LogOut, X } from "lucide-react";
+import { auth } from "@clerk/nextjs/server";
+import { Check, KeyRound, LogIn, LogOut, X } from "lucide-react";
 import { disconnectIntegrationAction } from "@/actions/integrations";
+import CredentialsForm from "@/components/dashboard/CredentialsForm";
 import { integrationIcon } from "@/components/dashboard/integrationIcons";
 import { ACCENTS, ClayCard, IconBubble, PageHeader, Pill, SoftButton } from "@/components/dashboard/ui";
 import { env } from "@/server/env";
-import { googleRedirectUri } from "@/server/integrations/google/oauth";
 import { INTEGRATIONS, integrationStatuses } from "@/server/integrations/registry";
 import type { AgentRole } from "@/server/integrations/types";
 
@@ -32,8 +33,10 @@ export default async function IntegrationsPage({
 }: {
   searchParams: Promise<{ connected?: string; error?: string }>;
 }) {
+  const { userId } = await auth();
+  if (!userId) return null;
   const sp = await searchParams;
-  const statuses = await integrationStatuses(true);
+  const statuses = await integrationStatuses(userId, true);
   const googleReady = !!env.google();
 
   return (
@@ -66,7 +69,7 @@ export default async function IntegrationsPage({
               <div className="flex items-start gap-4">
                 <IconBubble icon={Icon} accent={i.accent} size="lg" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">
+                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">
                     {CATEGORY_LABEL[i.category] ?? i.category}
                   </p>
                   <h2 className="font-heading text-xl font-semibold text-[color:var(--color-slate)]">{i.name}</h2>
@@ -85,7 +88,7 @@ export default async function IntegrationsPage({
               </div>
               <p className="mt-4 text-sm leading-relaxed text-[color:var(--color-slate)]/70">{i.description}</p>
               {st?.label && <p className="mt-2 truncate text-sm font-bold text-[color:var(--color-slate)]/80">{st.label}</p>}
-              {!st?.connected && st?.hint && <p className="mt-2 text-xs text-[color:var(--color-slate)]/55">{st.hint}</p>}
+              {!st?.connected && st?.hint && <p className="mt-2 text-xs text-[color:var(--color-slate)]/75">{st.hint}</p>}
 
               {i.connect.kind === "env" && (
                 <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Environment variables">
@@ -109,7 +112,7 @@ export default async function IntegrationsPage({
 
               {i.tools.length > 0 && (
                 <div className="mt-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">Tools</p>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">Tools</p>
                   <ul className="mt-2 space-y-1.5">
                     {i.tools.map((t) => (
                       <li key={t.name} className="text-xs text-[color:var(--color-slate)]/70">
@@ -143,37 +146,27 @@ export default async function IntegrationsPage({
                       <LogIn className="h-4 w-4" aria-hidden="true" /> Connect Google
                     </a>
                   ) : (
-                    <p className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--color-slate)]/55">
+                    <p className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--color-slate)]/75">
                       <X className="h-3.5 w-3.5" aria-hidden="true" /> Add GOOGLE_CLIENT_ID / SECRET first
                     </p>
+                  ))}
+
+                {i.connect.kind === "credentials" &&
+                  (st?.connected ? (
+                    <form action={disconnectIntegrationAction}>
+                      <input type="hidden" name="id" value={i.id} />
+                      <SoftButton type="submit">
+                        <LogOut className="h-4 w-4" aria-hidden="true" /> Disconnect
+                      </SoftButton>
+                    </form>
+                  ) : (
+                    <CredentialsForm integrationId={i.id} fields={i.connect.fields} accent={i.accent} />
                   ))}
               </div>
             </ClayCard>
           );
         })}
       </div>
-
-      <ClayCard title="Adding more integrations" icon={Code2} accent="lilac" className="mt-8">
-        <ol className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[color:var(--color-slate)]/75">
-          <li>
-            Create <code className="font-bold">src/server/integrations/&lt;name&gt;.ts</code> exporting an{" "}
-            <code className="font-bold">IntegrationDef</code>: a <code>status()</code> check and its tools (zod input, allowed
-            roles, whether it changes things).
-          </li>
-          <li>
-            Add it to <code className="font-bold">INTEGRATIONS</code> in <code>registry.ts</code>.
-          </li>
-          <li>
-            That&apos;s it — the phone agent, the task planner, the orchestrator and this page pick it up automatically, with
-            the same role checks, confirmations and logging.
-          </li>
-        </ol>
-        {googleReady && (
-          <p className="mt-4 text-xs text-[color:var(--color-slate)]/55">
-            Google OAuth redirect URI to register: <code className="font-bold">{googleRedirectUri()}</code>
-          </p>
-        )}
-      </ClayCard>
     </>
   );
 }

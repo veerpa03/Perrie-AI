@@ -1,10 +1,9 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { addTurn, logGuardrail } from "../db";
 import type { OwnerProfile, ProfileFact } from "../db/types";
 import { availableTools, executeTool, getTool, toAnthropicTools } from "../integrations/registry";
 import type { AnyTool } from "../integrations/types";
 import { actionKey, buildLeakFilter, isAffirmative, looksLikeManipulation, type LeakFilter } from "./guardrails";
-import { llm, models } from "./llm";
+import { llm, models, type ContentBlock, type Message, type MessageParam, type ToolResultBlockParam, type ToolUseBlock } from "./llm";
 import { greetingFor, systemPrompt, type Channel, type ConversationRole, type PromptContext } from "./prompts";
 
 /**
@@ -21,13 +20,11 @@ import { greetingFor, systemPrompt, type Channel, type ConversationRole, type Pr
  * Every turn and tool call is written to the call transcript.
  */
 
-type MessageParam = Anthropic.Messages.MessageParam;
-type ContentBlock = Anthropic.Messages.ContentBlock;
-
 const MAX_TOOL_ROUNDS = 6;
 const SENTENCE_END = /([.!?…]["')\]]?)(\s+)/;
 
 export interface SessionOptions {
+  userId: string;
   role: ConversationRole;
   channel: Channel;
   callId: string | null;
@@ -36,6 +33,8 @@ export interface SessionOptions {
   mission?: string | null;
   counterpartName?: string | null;
   caller?: { number?: string | null; name?: string | null };
+  /** Same tenant already spoke with this same counterpart in the last few hours — shorten the greeting. */
+  calledRecently?: boolean;
 }
 
 export interface RespondOptions {
@@ -67,6 +66,7 @@ export class AgentSession {
       mission: opts.mission,
       counterpartName: opts.counterpartName,
       callerKnownAs: opts.caller?.name ?? null,
+      calledRecently: opts.calledRecently ?? false,
     };
     this.system = systemPrompt(ctx);
     this.leakFilter = opts.role === "owner" ? null : buildLeakFilter(opts.profile, opts.facts);
@@ -78,7 +78,7 @@ export class AgentSession {
   readonly greeting: string;
 
   static async create(opts: SessionOptions): Promise<AgentSession> {
-    const tools = await availableTools(opts.role);
+    const tools = await availableTools(opts.userId, opts.role);
     return new AgentSession(opts, tools);
   }
 
@@ -89,7 +89,7 @@ export class AgentSession {
   private async log(speaker: "caller" | "agent" | "system" | "tool", text: string, meta: Record<string, unknown> = {}) {
     if (!this.opts.callId) return;
     try {
-      await addTurn(this.opts.callId, speaker, text, meta);
+      await addTurn(this.opts.userId, this.opts.callId, speaker, text, meta);
     } catch (err) {
       console.error("[session] transcript write failed", err);
     }
@@ -100,11 +100,17 @@ export class AgentSession {
     await this.log("agent", this.greeting);
   }
 
+  /** Write a spoken fallback (e.g. "sorry, I'm having trouble") to the transcript. */
+  async logFallback(text: string) {
+    await this.log("agent", text, { fallback: true });
+  }
+
   private filter(sentence: string): string {
     if (!this.leakFilter) return sentence;
     const { text, leaked } = this.leakFilter(sentence);
     if (leaked.length) {
       void logGuardrail({
+        userId: this.opts.userId,
         kind: "private_detail_blocked",
         severity: "block",
         detail: `Stopped a sentence that contained a private detail (${leaked.length} match${leaked.length > 1 ? "es" : ""}).`,
@@ -122,6 +128,7 @@ export class AgentSession {
     await this.log("caller", userText);
     if (looksLikeManipulation(userText)) {
       await logGuardrail({
+        userId: this.opts.userId,
         kind: "manipulation_attempt",
         severity: "warn",
         detail: `${this.opts.role === "owner" ? "Owner" : "Caller"} said something that looks like an attempt to override Perrie's rules.`,
@@ -140,39 +147,54 @@ export class AgentSession {
 
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
       if (ro.signal?.aborted) break;
-      let buffer = "";
-      const stream = llm().messages.stream(
-        {
-          model: models().voice,
-          max_tokens: this.opts.channel === "voice" ? 400 : 700,
-          system: this.system,
-          messages: this.messages,
-          tools: toAnthropicTools(this.tools),
-        },
-        { signal: ro.signal },
-      );
-      stream.on("text", (delta) => {
-        buffer += delta;
-        let m: RegExpExecArray | null;
-        while ((m = SENTENCE_END.exec(buffer))) {
-          const end = m.index + m[1].length;
-          say(buffer.slice(0, end));
-          buffer = buffer.slice(end + m[2].length);
-        }
-      });
+      const spokenBeforeRound = spoken.length;
+      let final: Message | undefined;
+      let aborted = false;
 
-      let final: Anthropic.Messages.Message;
-      try {
-        final = await stream.finalMessage();
-      } catch (err) {
-        if (ro.signal?.aborted) {
-          // Barge-in: keep what was actually said so the model knows.
-          if (spoken.length) this.messages.push({ role: "assistant", content: `${spoken.join(" ")} …(interrupted)` });
+      // Up to 2 attempts: a transient LLM failure (timeout/5xx) before
+      // anything has been spoken this round is safe to silently retry once.
+      // Once a sentence has gone to TTS we can't take it back, so a failure
+      // past that point falls straight through to the caller's catch block.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let buffer = "";
+        const stream = llm().messages.stream(
+          {
+            model: models().voice,
+            max_tokens: this.opts.channel === "voice" ? 400 : 700,
+            system: this.system,
+            messages: this.messages,
+            tools: toAnthropicTools(this.tools),
+          },
+          { signal: ro.signal },
+        );
+        stream.on("text", (delta) => {
+          buffer += delta;
+          let m: RegExpExecArray | null;
+          while ((m = SENTENCE_END.exec(buffer))) {
+            const end = m.index + m[1].length;
+            say(buffer.slice(0, end));
+            buffer = buffer.slice(end + m[2].length);
+          }
+        });
+
+        try {
+          final = await stream.finalMessage();
+          if (buffer.trim()) say(buffer);
           break;
+        } catch (err) {
+          if (ro.signal?.aborted) {
+            aborted = true;
+            // Barge-in: keep what was actually said so the model knows.
+            if (spoken.length) this.messages.push({ role: "assistant", content: `${spoken.join(" ")} …(interrupted)` });
+            break;
+          }
+          if (spoken.length > spokenBeforeRound || attempt === 1) throw err;
+          console.error("[agent] transient LLM error, retrying once", err);
         }
-        throw err;
       }
-      if (buffer.trim()) say(buffer);
+
+      if (aborted) break;
+      if (!final) break;
 
       // Store the assistant turn with the filtered text so later turns can't
       // build on a blocked sentence.
@@ -181,10 +203,10 @@ export class AgentSession {
       );
       this.messages.push({ role: "assistant", content });
 
-      const toolUses = content.filter((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use");
+      const toolUses = content.filter((b): b is ToolUseBlock => b.type === "tool_use");
       if (final.stop_reason !== "tool_use" || !toolUses.length) break;
 
-      const results: Anthropic.Messages.ToolResultBlockParam[] = [];
+      const results: ToolResultBlockParam[] = [];
       for (const use of toolUses) results.push(await this.runTool(use));
       this.messages.push({ role: "user", content: results });
       if (this.ended) break;
@@ -195,9 +217,9 @@ export class AgentSession {
     return { text, ended: this.ended };
   }
 
-  private async runTool(use: Anthropic.Messages.ToolUseBlock): Promise<Anthropic.Messages.ToolResultBlockParam> {
+  private async runTool(use: ToolUseBlock): Promise<ToolResultBlockParam> {
     const tool = getTool(use.name);
-    const reply = (content: unknown, isError = false): Anthropic.Messages.ToolResultBlockParam => ({
+    const reply = (content: unknown, isError = false): ToolResultBlockParam => ({
       type: "tool_result",
       tool_use_id: use.id,
       content: JSON.stringify(content).slice(0, 6000),
@@ -219,6 +241,7 @@ export class AgentSession {
         }
         await this.log("system", `Waiting for a clear yes before: ${what}`, { tool: use.name, guard: "confirmation" });
         await logGuardrail({
+          userId: this.opts.userId,
           kind: "confirmation_required",
           severity: "info",
           detail: `Asked for confirmation before: ${what}`,
@@ -234,6 +257,7 @@ export class AgentSession {
     }
 
     const outcome = await executeTool(use.name, use.input, {
+      userId: this.opts.userId,
       role: this.opts.role,
       profile: this.opts.profile,
       timezone: this.opts.profile?.timezone ?? "UTC",

@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
-import { LogIn } from "lucide-react";
+import { LayoutDashboard, LogIn } from "lucide-react";
 
 const MotionLink = motion.create(Link);
 
@@ -10,15 +11,21 @@ const MotionLink = motion.create(Link);
  * The landing page's only chrome: one compact Sign-in control, upper-right.
  * Clay silhouette (pastel fill + double inner shadow) with a liquid-glass
  * highlight, a gentle hover lift and a small press response (Framer Motion),
- * and a visible keyboard focus state. No constant bouncing. Routes to the
- * existing frontend sign-in preview (/sign-in).
+ * and a visible keyboard focus state. No constant bouncing. Signed out it
+ * routes to /sign-in; signed in it goes straight to the dashboard (Clerk's
+ * session cookie is what makes this "stay signed in" automatically).
  */
 export default function AnimatedSignInButton() {
+  const { isSignedIn } = useUser();
+  const href = isSignedIn ? "/dashboard" : "/sign-in";
+  const label = isSignedIn ? "Dashboard" : "Sign in";
+  const Icon = isSignedIn ? LayoutDashboard : LogIn;
+
   return (
     <div className="fixed right-4 top-4 z-50 sm:right-6 sm:top-6">
       <MotionLink
-        href="/sign-in"
-        aria-label="Sign in"
+        href={href}
+        aria-label={label}
         data-demo-return-focus
         className="focus-ring relative inline-flex items-center gap-2 overflow-hidden rounded-full px-5 py-2.5 text-sm font-semibold text-[color:var(--color-slate)]"
         style={{
@@ -41,8 +48,8 @@ export default function AnimatedSignInButton() {
             background: "linear-gradient(to bottom, rgba(255,255,255,0.65), rgba(255,255,255,0))",
           }}
         />
-        <LogIn className="relative h-4 w-4" aria-hidden="true" />
-        <span className="relative">Sign in</span>
+        <Icon className="relative h-4 w-4" aria-hidden="true" />
+        <span className="relative">{label}</span>
       </MotionLink>
     </div>
   );

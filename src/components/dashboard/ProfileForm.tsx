@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { CheckCircle2, KeyRound, Loader2, Save, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { saveProfileAction, type FormState } from "@/actions/profile";
 import { ClayCard, FieldLabel, fieldClass, insetField, RainbowButton } from "./ui";
@@ -51,9 +51,14 @@ export default function ProfileForm({
   const [tz, setTz] = useState(initial.timezone);
   const e = state?.errors ?? {};
 
-  // New profile: default to the browser's timezone.
+  // New profile: default to the browser's timezone — once, on first mount
+  // only. Without the ref guard, a save (which refreshes `isNew`/`timezones`
+  // props via revalidatePath) re-triggers this effect and stomps whatever
+  // timezone the person just picked and saved back to the browser's default.
+  const autoDetected = useRef(false);
   useEffect(() => {
-    if (!isNew) return;
+    if (!isNew || autoDetected.current) return;
+    autoDetected.current = true;
     try {
       const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (local && timezones.includes(local)) setTz(local);
@@ -176,7 +181,7 @@ export default function ProfileForm({
                 placeholder="••••"
               />
               <KeyRound
-                className="pointer-events-none absolute left-3.5 top-[calc(50%+4px)] h-4 w-4 -translate-y-1/2 text-[color:var(--color-slate)]/40"
+                className="pointer-events-none absolute left-3.5 top-[calc(50%+4px)] h-4 w-4 -translate-y-1/2 text-[color:var(--color-slate)]/60"
                 aria-hidden="true"
               />
             </div>

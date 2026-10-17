@@ -122,7 +122,7 @@ export function PageHeader({
     <header className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         {eyebrow && (
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[color:var(--color-slate)]/45">{eyebrow}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[color:var(--color-slate)]/75">{eyebrow}</p>
         )}
         <h1 className="mt-1 font-display text-4xl text-[color:var(--color-slate)] sm:text-5xl">{title}</h1>
         {subtitle && <p className="mt-2 max-w-2xl text-[color:var(--color-slate)]/70">{subtitle}</p>}
@@ -206,7 +206,7 @@ export function FieldLabel({ htmlFor, children, hint }: { htmlFor: string; child
   return (
     <label htmlFor={htmlFor} className="block">
       <span className="text-sm font-bold text-[color:var(--color-slate)]">{children}</span>
-      {hint && <span className="ml-2 text-xs text-[color:var(--color-slate)]/50">{hint}</span>}
+      {hint && <span className="ml-2 text-xs text-[color:var(--color-slate)]/75">{hint}</span>}
     </label>
   );
 }

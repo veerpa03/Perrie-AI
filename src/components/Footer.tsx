@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 import { ArrowUp, Sparkles } from "lucide-react";
 import ClayShapes from "./ClayShapes";
 import { useDemoModal } from "./DemoModal";
@@ -12,11 +13,12 @@ const linkClass =
 /**
  * Site footer: a rounded clay slab in a soft rainbow pastel gradient with the
  * Perrie name (text only — no mascot icon), a few honest links to things that
- * exist (features, the demo, the dashboard preview, sign-in), the frontend
- * preview note, and a back-to-top button.
+ * exist (features, the demo, the dashboard, sign-in/dashboard depending on
+ * auth state), a note about the sample walkthrough, and a back-to-top button.
  */
 export default function Footer() {
   const { open: openDemo } = useDemoModal();
+  const { isSignedIn } = useUser();
 
   return (
     <footer className="clay-canvas px-3 pb-3 pt-10 sm:px-5 sm:pb-5">
@@ -40,7 +42,7 @@ export default function Footer() {
         <div className="relative z-10 grid gap-10 md:grid-cols-[1.4fr_1fr_1fr_1.3fr]">
           <div>
             <p className="font-display text-5xl text-[color:var(--color-slate)]">
-              Perrie<span className="rainbow-text">.</span>
+              Perrie<span className="accent-text">.</span>
             </p>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-[color:var(--color-slate)]/70">
               Your personal AI assistant. A little help, all around you.
@@ -61,7 +63,7 @@ export default function Footer() {
           </div>
 
           <nav aria-label="Explore">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--color-slate)]/45">Explore</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--color-slate)]/75">Explore</p>
             <ul className="mt-4 space-y-3">
               <li>
                 <button type="button" className={linkClass} onClick={() => scrollToId("features")}>
@@ -82,11 +84,11 @@ export default function Footer() {
           </nav>
 
           <nav aria-label="Account">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--color-slate)]/45">Account</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--color-slate)]/75">Account</p>
             <ul className="mt-4 space-y-3">
               <li>
-                <Link href="/sign-in" className={linkClass}>
-                  Sign in
+                <Link href={isSignedIn ? "/dashboard" : "/sign-in"} className={linkClass}>
+                  {isSignedIn ? "Dashboard" : "Sign in"}
                 </Link>
               </li>
             </ul>
@@ -101,17 +103,25 @@ export default function Footer() {
           >
             <p className="flex items-center gap-2 text-sm font-bold text-[color:var(--color-slate)]">
               <Sparkles className="h-4 w-4 text-[#EC6FA6]" aria-hidden="true" />
-              Frontend preview
+              See it before you sign in
             </p>
-            <p className="mt-2 text-xs leading-relaxed text-[color:var(--color-slate)]/65">
-              Sign-in and the task examples here aren&apos;t connected to a live backend yet — nothing is
-              scheduled, sent, or stored.
+            <p className="mt-2 text-xs leading-relaxed text-[color:var(--color-slate)]/75">
+              The examples above are a sample walkthrough. Sign in and Perrie works against your real
+              calendar, contacts, and phone line.
             </p>
           </div>
         </div>
 
-        <div className="relative z-10 mt-10 flex flex-col items-start justify-between gap-2 border-t border-[color:var(--color-slate)]/10 pt-6 text-xs text-[color:var(--color-slate)]/50 sm:flex-row sm:items-center">
+        <div className="relative z-10 mt-10 flex flex-col items-start justify-between gap-3 border-t border-[color:var(--color-slate)]/10 pt-6 text-xs text-[color:var(--color-slate)]/75 sm:flex-row sm:items-center">
           <p>&copy; {new Date().getFullYear()} Perrie</p>
+          <nav aria-label="Legal" className="flex items-center gap-4">
+            <Link href="/privacy" className="font-semibold transition hover:text-[color:var(--color-slate)]">
+              Privacy
+            </Link>
+            <Link href="/terms" className="font-semibold transition hover:text-[color:var(--color-slate)]">
+              Terms
+            </Link>
+          </nav>
           <p>Made with a little help.</p>
         </div>
       </div>

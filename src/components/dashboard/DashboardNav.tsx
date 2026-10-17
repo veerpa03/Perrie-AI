@@ -46,7 +46,7 @@ export default function DashboardNav({ orientation }: { orientation: "vertical" 
                 aria-current={active ? "page" : undefined}
                 className={`focus-ring flex items-center gap-3 rounded-2xl font-bold transition-all duration-200 ${
                   vertical ? "px-3 py-2.5 text-[15px]" : "px-3.5 py-2 text-sm"
-                } ${active ? "text-[color:var(--color-slate)]" : "text-[color:var(--color-slate)]/60 hover:text-[color:var(--color-slate)]"}`}
+                } ${active ? "text-[color:var(--color-slate)]" : "text-[color:var(--color-slate)]/75 hover:text-[color:var(--color-slate)]"}`}
                 style={
                   active
                     ? {

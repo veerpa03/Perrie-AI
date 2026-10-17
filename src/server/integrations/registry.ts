@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { logGuardrail } from "../db";
-import { anthropic, bluejay, deepgram, perrieCore, supabase } from "./core";
+import { bluejay, deepgram, groq, perrieCore, supabase } from "./core";
 import { googleCalendar } from "./google/calendar";
 import { googleContacts } from "./google/contacts";
 import { twilio } from "./twilio";
@@ -18,7 +18,7 @@ export const INTEGRATIONS: IntegrationDef[] = [
   googleCalendar,
   googleContacts,
   deepgram,
-  anthropic,
+  groq,
   supabase,
   bluejay,
 ];
@@ -34,35 +34,37 @@ for (const integ of INTEGRATIONS) {
 export const getTool = (name: string) => TOOLS.get(name);
 export const getIntegration = (id: string) => INTEGRATIONS.find((i) => i.id === id);
 
-// Short cache so a conversation turn doesn't re-check every integration.
-let statusCache: { at: number; value: Map<string, IntegrationStatus> } | null = null;
+// Short cache per tenant so a conversation turn doesn't re-check every integration.
+const statusCache = new Map<string, { at: number; value: Map<string, IntegrationStatus> }>();
 
-export async function integrationStatuses(fresh = false): Promise<Map<string, IntegrationStatus>> {
-  if (!fresh && statusCache && Date.now() - statusCache.at < 5000) return statusCache.value;
+export async function integrationStatuses(userId: string, fresh = false): Promise<Map<string, IntegrationStatus>> {
+  const cached = statusCache.get(userId);
+  if (!fresh && cached && Date.now() - cached.at < 5000) return cached.value;
   const entries = await Promise.all(
     INTEGRATIONS.map(async (i) => {
       try {
-        return [i.id, await i.status()] as const;
+        return [i.id, await i.status(userId)] as const;
       } catch (err) {
         return [i.id, { connected: false, error: (err as Error).message }] as const;
       }
     }),
   );
-  statusCache = { at: Date.now(), value: new Map(entries) };
-  return statusCache.value;
+  const value = new Map(entries);
+  statusCache.set(userId, { at: Date.now(), value });
+  return value;
 }
 
-export function invalidateIntegrationStatus() {
-  statusCache = null;
+export function invalidateIntegrationStatus(userId: string) {
+  statusCache.delete(userId);
 }
 
 /** Tools a role may use right now (integration connected). */
-export async function availableTools(role: AgentRole): Promise<AnyTool[]> {
-  const statuses = await integrationStatuses();
+export async function availableTools(userId: string, role: AgentRole): Promise<AnyTool[]> {
+  const statuses = await integrationStatuses(userId);
   return [...TOOLS.values()].filter((t) => t.roles.includes(role) && statuses.get(t.integration)?.connected);
 }
 
-/** JSON-schema tool definitions for the Anthropic Messages API. */
+/** JSON-schema tool definitions, Anthropic-Messages-shaped (converted to OpenAI/Groq function format in agent/llm.ts). */
 export function toAnthropicTools(tools: AnyTool[]) {
   return tools.map((t) => ({
     name: t.name,
@@ -95,6 +97,7 @@ export async function executeTool(name: string, rawInput: unknown, ctx: ToolCont
 
   if (!tool.roles.includes(ctx.role)) {
     await logGuardrail({
+      userId: ctx.userId,
       kind: "tool_blocked_for_role",
       severity: "block",
       detail: `Blocked ${name} for a ${ctx.role} — only ${tool.roles.join("/")} may use it.`,
@@ -109,7 +112,7 @@ export async function executeTool(name: string, rawInput: unknown, ctx: ToolCont
     };
   }
 
-  const status = (await integrationStatuses()).get(tool.integration);
+  const status = (await integrationStatuses(ctx.userId)).get(tool.integration);
   if (!status?.connected) {
     return { ok: false, error: `${tool.integration} isn't connected, so ${name} is unavailable. Say so honestly.` };
   }

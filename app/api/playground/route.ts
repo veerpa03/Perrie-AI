@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { z } from "zod";
 import { LlmUnavailableError } from "@/server/agent/llm";
 import { AgentSession } from "@/server/agent/session";
@@ -11,7 +12,9 @@ import { finalizeCallOnce } from "@/server/voice/finalize";
  * Dashboard-only (guarded by the server's local/password check).
  */
 
-const g = globalThis as unknown as { __perriePlayground?: Map<string, { session: AgentSession; at: number }> };
+const g = globalThis as unknown as {
+  __perriePlayground?: Map<string, { session: AgentSession; userId: string; at: number }>;
+};
 const sessions = (g.__perriePlayground ??= new Map());
 
 const body = z.discriminatedUnion("action", [
@@ -33,6 +36,8 @@ function sweep() {
 }
 
 export async function POST(req: Request) {
+  const { userId } = await auth();
+  if (!userId) return json({ error: "Not signed in" }, 401);
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return json({ error: "Bad request" }, 400);
   const input = parsed.data;
@@ -43,8 +48,9 @@ export async function POST(req: Request) {
       if (input.role === "delegate" && (!input.mission || input.mission.length < 10)) {
         return json({ error: "Give Perrie a mission for the call (at least a sentence)." }, 400);
       }
-      const [profile, facts] = await Promise.all([getProfile(), listFacts()]);
+      const [profile, facts] = await Promise.all([getProfile(userId), listFacts(userId)]);
       const call = await db().insert("calls", {
+        user_id: userId,
         twilio_call_sid: null,
         direction: "web",
         role: input.role,
@@ -62,6 +68,7 @@ export async function POST(req: Request) {
         duration_seconds: null,
       });
       const session = await AgentSession.create({
+        userId,
         role: input.role,
         channel: "text",
         callId: call.id,
@@ -72,17 +79,18 @@ export async function POST(req: Request) {
         caller: { name: input.role === "guest" ? input.counterpart || null : null },
       });
       await session.logGreeting();
-      sessions.set(call.id, { session, at: Date.now() });
+      sessions.set(call.id, { session, userId, at: Date.now() });
       return json({ callId: call.id, greeting: session.greeting, tools: session.toolNames });
     }
 
     const entry = sessions.get(input.callId);
+    if (entry && entry.userId !== userId) return json({ error: "Not found" }, 404);
     if (input.action === "say") {
       if (!entry) return json({ error: "This conversation has expired — start a new one." }, 410);
       entry.at = Date.now();
-      const before = (await listTurns(input.callId)).length;
+      const before = (await listTurns(userId, input.callId)).length;
       const { text, ended } = await entry.session.respond(input.text);
-      const turns = (await listTurns(input.callId)).slice(before);
+      const turns = (await listTurns(userId, input.callId)).slice(before);
       return json({
         reply: text,
         ended,
@@ -95,7 +103,7 @@ export async function POST(req: Request) {
     // end
     sessions.delete(input.callId);
     const call = await db().get("calls", input.callId);
-    if (!call) return json({ error: "Not found" }, 404);
+    if (!call || call.user_id !== userId) return json({ error: "Not found" }, 404);
     if (!call.ended_at) {
       const ended = new Date();
       await db().update("calls", call.id, {

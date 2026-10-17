@@ -1,15 +1,17 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
 import { motion } from "framer-motion";
 import { useDemoModal } from "./DemoModal";
 
 /**
  * Minimal closing call to action the carousel releases into. Anton display
  * headline, clay + liquid-glass primary action (opens the clearly-labelled
- * frontend demo), and a quiet sign-in link. Pastel clay surface.
+ * frontend demo), and a quiet sign-in/dashboard link. Pastel clay surface.
  */
 export default function FinalCTA() {
   const { open } = useDemoModal();
+  const { isSignedIn } = useUser();
   return (
     <section className="clay-canvas relative overflow-hidden px-6 py-24">
       <div className="mx-auto flex max-w-2xl flex-col items-center text-center">
@@ -50,7 +52,7 @@ export default function FinalCTA() {
             <span className="relative">See an example</span>
           </motion.button>
           <a
-            href="/sign-in"
+            href={isSignedIn ? "/dashboard" : "/sign-in"}
             className="focus-ring rounded-full px-7 py-3.5 text-sm font-semibold text-[color:var(--color-slate)] transition-transform hover:-translate-y-0.5 active:translate-y-0 sm:text-base"
             style={{
               fontFamily: "var(--font-body)",
@@ -59,7 +61,7 @@ export default function FinalCTA() {
                 "8px 10px 22px -10px rgba(38,52,69,0.26), inset -4px -4px 10px rgba(38,52,69,0.12), inset 5px 5px 12px rgba(255,255,255,0.7)",
             }}
           >
-            Sign in
+            {isSignedIn ? "Dashboard" : "Sign in"}
           </a>
         </div>
       </div>

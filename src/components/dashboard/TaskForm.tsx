@@ -57,7 +57,7 @@ export default function TaskForm() {
           {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Wand2 className="h-4 w-4" aria-hidden="true" />}
           {pending ? "Planning…" : "Plan it"}
         </RainbowButton>
-        <p id="task-hint" className="text-xs text-[color:var(--color-slate)]/55">
+        <p id="task-hint" className="text-xs text-[color:var(--color-slate)]/75">
           Perrie plans first. Nothing happens until you approve the plan.
         </p>
         {state && !state.ok && (

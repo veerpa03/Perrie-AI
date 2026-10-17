@@ -34,25 +34,25 @@ function view(p: Person): ContactView {
   };
 }
 
-async function search(query: string): Promise<ContactView[]> {
+async function search(userId: string, query: string): Promise<ContactView[]> {
   const url = (q: string) =>
     `${API}/people:searchContacts?${new URLSearchParams({ query: q, readMask: READ_MASK, pageSize: "10" })}`;
-  let res = await googleFetch<{ results?: { person: Person }[] }>(ID, url(query));
+  let res = await googleFetch<{ results?: { person: Person }[] }>(userId, ID, url(query));
   if (!res.results?.length) {
     // Google asks clients to send a warm-up request to refresh its cache.
-    await googleFetch(ID, url(""));
-    res = await googleFetch<{ results?: { person: Person }[] }>(ID, url(query));
+    await googleFetch(userId, ID, url(""));
+    res = await googleFetch<{ results?: { person: Person }[] }>(userId, ID, url(query));
   }
   return (res.results ?? []).map((r) => view(r.person));
 }
 
 /** Caller-ID lookup: who is this number in the owner's contacts? (null if unknown / not connected) */
-export async function lookupContactByPhone(phone: string): Promise<ContactView | null> {
+export async function lookupContactByPhone(userId: string, phone: string): Promise<ContactView | null> {
   try {
-    const rec = await db().get("integrations", ID);
+    const [rec] = await db().list("integrations", { where: { user_id: userId, integration: ID }, limit: 1 });
     if (rec?.status !== "connected") return null;
     const target = digitsOnly(phone).slice(-10);
-    const hits = await search(phone);
+    const hits = await search(userId, phone);
     return hits.find((c) => c.phones.some((p) => digitsOnly(p.number).endsWith(target))) ?? null;
   } catch {
     return null;
@@ -67,8 +67,8 @@ const contactsSearch: ToolDef = {
   input: z.object({ query: z.string().min(1).max(100) }),
   roles: ["owner", "system"],
   sideEffect: false,
-  async run(input: { query: string }) {
-    const contacts = await search(input.query);
+  async run(input: { query: string }, ctx) {
+    const contacts = await search(ctx.userId, input.query);
     return { count: contacts.length, contacts };
   },
 };
@@ -81,9 +81,9 @@ export const googleContacts: IntegrationDef = {
   accent: "mint",
   icon: "contacts",
   connect: { kind: "oauth", provider: "google", scopes: GOOGLE_SCOPES.google_contacts },
-  async status() {
+  async status(userId: string) {
     if (!env.google()) return { connected: false, hint: "Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET." };
-    const rec = await db().get("integrations", ID);
+    const [rec] = await db().list("integrations", { where: { user_id: userId, integration: ID }, limit: 1 });
     if (rec?.status === "error") return { connected: false, label: rec.account_label, error: "Reconnect needed." };
     return rec?.status === "connected"
       ? { connected: true, label: rec.account_label }

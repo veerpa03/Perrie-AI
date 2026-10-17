@@ -23,7 +23,6 @@ export const env = {
   },
   /** Where the owner opens the dashboard (used for the Google OAuth redirect). */
   appUrl: () => trimSlash(read("APP_URL") ?? `http://localhost:${read("PORT") ?? "3000"}`),
-  dashboardPassword: () => read("DASHBOARD_PASSWORD"),
   secret: () => read("PERRIE_SECRET"),
   isProduction: () => process.env.NODE_ENV === "production",
 
@@ -32,21 +31,18 @@ export const env = {
     const key = read("SUPABASE_SECRET_KEY") ?? read("SUPABASE_SERVICE_ROLE_KEY");
     return url && key ? { url, key } : null;
   },
-  anthropic: () => {
-    const apiKey = read("ANTHROPIC_API_KEY");
+  groq: () => {
+    const apiKey = read("GROQ_API_KEY");
     if (!apiKey) return null;
     return {
       apiKey,
-      // Voice turns favour latency; planning favours capability.
-      voiceModel: read("PERRIE_MODEL_VOICE") ?? "claude-sonnet-5-5",
-      plannerModel: read("PERRIE_MODEL_PLANNER") ?? "claude-opus-5-5",
+      // Voice turns favour latency; planning favours capability. Both free on Groq.
+      // gpt-oss-20b/qwen are org-blocked on the free tier; 120b is the one
+      // confirmed working model, so both roles use it (voice at low
+      // reasoning effort for latency, planner at medium for better plans).
+      voiceModel: read("PERRIE_MODEL_VOICE") ?? "openai/gpt-oss-120b",
+      plannerModel: read("PERRIE_MODEL_PLANNER") ?? "openai/gpt-oss-120b",
     };
-  },
-  twilio: () => {
-    const accountSid = read("TWILIO_ACCOUNT_SID");
-    const authToken = read("TWILIO_AUTH_TOKEN");
-    const phoneNumber = read("TWILIO_PHONE_NUMBER");
-    return accountSid && authToken && phoneNumber ? { accountSid, authToken, phoneNumber } : null;
   },
   deepgram: () => {
     const apiKey = read("DEEPGRAM_API_KEY");
@@ -68,14 +64,13 @@ export const env = {
   },
 };
 
-export type ServiceKey = "supabase" | "anthropic" | "twilio" | "deepgram" | "google" | "bluejay" | "publicUrl";
+export type ServiceKey = "supabase" | "groq" | "deepgram" | "google" | "bluejay" | "publicUrl";
 
-/** Which services have credentials, for the setup checklist. */
+/** Which operator-level services have credentials, for the setup checklist. Twilio is per-tenant (see twilioCreds.ts), not here. */
 export function serviceStatus(): Record<ServiceKey, boolean> {
   return {
     supabase: !!env.supabase(),
-    anthropic: !!env.anthropic(),
-    twilio: !!env.twilio(),
+    groq: !!env.groq(),
     deepgram: !!env.deepgram(),
     google: !!env.google(),
     bluejay: !!env.bluejay(),

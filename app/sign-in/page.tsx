@@ -1,8 +1,9 @@
+import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
-import { ArrowLeft, Info } from "lucide-react";
-import SignInForm from "@/components/SignInForm";
+import { ArrowLeft } from "lucide-react";
 import ClayShapes from "@/components/ClayShapes";
 import ClayIcon from "@/components/ClayIcons";
+import { clerkClayAppearance } from "@/components/clerkAppearance";
 
 export const metadata = {
   title: "Sign in — Perrie",
@@ -30,7 +31,7 @@ export default function SignInPage() {
         {/* Brand side — name only, no mascot icon. */}
         <div className="text-center md:text-left">
           <p className="font-display text-6xl leading-none text-[color:var(--color-slate)] sm:text-7xl">
-            <span className="rainbow-text">Perrie</span>
+            <span className="accent-text">Perrie</span>
           </p>
           <p className="mx-auto mt-4 max-w-sm text-base leading-relaxed text-[color:var(--color-slate)]/70 md:mx-0">
             Your personal AI assistant — a little help, all around you.
@@ -56,22 +57,13 @@ export default function SignInPage() {
           <h1 className="font-display text-4xl text-[color:var(--color-slate)]">Welcome back</h1>
           <p className="mt-1 text-sm text-[color:var(--color-slate)]/60">Sign in to keep your day moving.</p>
 
-          <div
-            role="note"
-            className="mt-5 flex items-start gap-2 rounded-2xl px-4 py-3 text-xs leading-relaxed text-[color:var(--color-slate)]/75"
-            style={{
-              background: "linear-gradient(135deg, #EDE6FF, #FFE6F1)",
-              boxShadow: "inset 2px 2px 6px rgba(255,255,255,0.85), inset -2px -3px 7px rgba(38,52,69,0.06)",
-            }}
-          >
-            <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#9277EA]" aria-hidden="true" />
-            <span>
-              No accounts yet: this form doesn&apos;t create or check anything. Your dashboard runs on your own
-              machine and only opens locally (or with your dashboard password).
-            </span>
+          <div className="mt-6">
+            <SignIn
+              appearance={clerkClayAppearance}
+              signUpUrl="/sign-up"
+              fallbackRedirectUrl="/dashboard"
+            />
           </div>
-
-          <SignInForm />
 
           <p className="mt-6 text-center text-sm">
             <Link

@@ -32,12 +32,18 @@ export function isGoogleIntegration(id: string): id is GoogleIntegrationId {
   return id in GOOGLE_SCOPES;
 }
 
+/** Finds this tenant's row for an integration slug (integrations.id is a generated uuid, not the slug). */
+async function findIntegrationRow(userId: string, integration: string) {
+  const [row] = await db().list("integrations", { where: { user_id: userId, integration }, limit: 1 });
+  return row ?? null;
+}
+
 /** Returns the consent URL plus a nonce to bind the flow to this browser (cookie). */
-export function buildGoogleAuthUrl(integration: GoogleIntegrationId): { url: string; nonce: string } {
+export function buildGoogleAuthUrl(userId: string, integration: GoogleIntegrationId): { url: string; nonce: string } {
   const g = env.google();
   if (!g) throw new Error("GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are not set.");
   const nonce = randomBytes(16).toString("base64url");
-  const state = signToken({ i: integration, n: nonce }, 600);
+  const state = signToken({ i: integration, n: nonce, u: userId }, 600);
   const params = new URLSearchParams({
     client_id: g.clientId,
     redirect_uri: googleRedirectUri(),
@@ -51,10 +57,12 @@ export function buildGoogleAuthUrl(integration: GoogleIntegrationId): { url: str
   return { url: `${AUTH_URL}?${params}`, nonce };
 }
 
-export function readGoogleState(state: string | null): { integration: GoogleIntegrationId; nonce: string } | null {
-  const p = verifyToken<{ i: string; n: string }>(state);
-  if (!p || !isGoogleIntegration(p.i)) return null;
-  return { integration: p.i, nonce: p.n };
+export function readGoogleState(
+  state: string | null,
+): { integration: GoogleIntegrationId; nonce: string; userId: string } | null {
+  const p = verifyToken<{ i: string; n: string; u: string }>(state);
+  if (!p || !isGoogleIntegration(p.i) || !p.u) return null;
+  return { integration: p.i, nonce: p.n, userId: p.u };
 }
 
 function emailFromIdToken(idToken: string | undefined): string | null {
@@ -67,7 +75,11 @@ function emailFromIdToken(idToken: string | undefined): string | null {
   }
 }
 
-export async function completeGoogleConnection(integration: GoogleIntegrationId, code: string): Promise<void> {
+export async function completeGoogleConnection(
+  userId: string,
+  integration: GoogleIntegrationId,
+  code: string,
+): Promise<void> {
   const g = env.google();
   if (!g) throw new Error("Google OAuth is not configured.");
   const res = await fetch(TOKEN_URL, {
@@ -102,19 +114,21 @@ export async function completeGoogleConnection(integration: GoogleIntegrationId,
     refresh_token: json.refresh_token,
     expires_at: Date.now() + (json.expires_in ?? 3600) * 1000,
   };
-  await db().upsert("integrations", {
-    id: integration,
-    status: "connected",
+  const existing = await findIntegrationRow(userId, integration);
+  const patch = {
+    status: "connected" as const,
     account_label: emailFromIdToken(json.id_token),
     scopes: granted,
     credentials_enc: encryptJSON(tokens),
     meta: {},
     connected_at: new Date().toISOString(),
-  });
+  };
+  if (existing) await db().update("integrations", existing.id, patch);
+  else await db().insert("integrations", { user_id: userId, integration, ...patch });
 }
 
-export async function disconnectGoogle(integration: GoogleIntegrationId): Promise<void> {
-  const rec = await db().get("integrations", integration);
+export async function disconnectGoogle(userId: string, integration: GoogleIntegrationId): Promise<void> {
+  const rec = await findIntegrationRow(userId, integration);
   if (rec?.credentials_enc) {
     try {
       const t = decryptJSON<StoredTokens>(rec.credentials_enc);
@@ -124,7 +138,7 @@ export async function disconnectGoogle(integration: GoogleIntegrationId): Promis
     }
   }
   if (rec) {
-    await db().update("integrations", integration, {
+    await db().update("integrations", rec.id, {
       status: "disconnected",
       credentials_enc: null,
       scopes: [],
@@ -134,8 +148,8 @@ export async function disconnectGoogle(integration: GoogleIntegrationId): Promis
   }
 }
 
-async function accessToken(integration: GoogleIntegrationId, forceRefresh = false): Promise<string> {
-  const rec = await db().get("integrations", integration);
+async function accessToken(userId: string, integration: GoogleIntegrationId, forceRefresh = false): Promise<string> {
+  const rec = await findIntegrationRow(userId, integration);
   if (!rec?.credentials_enc || rec.status === "disconnected") throw new Error(`${integration} is not connected.`);
   const t = decryptJSON<StoredTokens>(rec.credentials_enc);
   if (!forceRefresh && t.expires_at - 60_000 > Date.now()) return t.access_token;
@@ -153,20 +167,25 @@ async function accessToken(integration: GoogleIntegrationId, forceRefresh = fals
   });
   const json = (await res.json()) as { access_token?: string; expires_in?: number; error?: string };
   if (!res.ok || !json.access_token) {
-    await db().update("integrations", integration, {
+    await db().update("integrations", rec.id, {
       status: "error",
       meta: { ...rec.meta, last_error: json.error ?? `HTTP ${res.status}` },
     });
     throw new Error(`${integration}: Google refused the refresh (${json.error ?? res.status}); reconnect it.`);
   }
   const next: StoredTokens = { ...t, access_token: json.access_token, expires_at: Date.now() + (json.expires_in ?? 3600) * 1000 };
-  await db().update("integrations", integration, { credentials_enc: encryptJSON(next), status: "connected" });
+  await db().update("integrations", rec.id, { credentials_enc: encryptJSON(next), status: "connected" });
   return next.access_token;
 }
 
 /** Authorised JSON request to a Google API; refreshes once on 401. */
-export async function googleFetch<T>(integration: GoogleIntegrationId, url: string, init: RequestInit = {}): Promise<T> {
-  let token = await accessToken(integration);
+export async function googleFetch<T>(
+  userId: string,
+  integration: GoogleIntegrationId,
+  url: string,
+  init: RequestInit = {},
+): Promise<T> {
+  let token = await accessToken(userId, integration);
   for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch(url, {
       ...init,
@@ -174,7 +193,7 @@ export async function googleFetch<T>(integration: GoogleIntegrationId, url: stri
       signal: init.signal ?? AbortSignal.timeout(10_000),
     });
     if (res.status === 401 && attempt === 0) {
-      token = await accessToken(integration, true);
+      token = await accessToken(userId, integration, true);
       continue;
     }
     const body = await res.text();

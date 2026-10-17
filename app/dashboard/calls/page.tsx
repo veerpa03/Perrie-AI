@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Bot, PhoneCall, PhoneIncoming, PhoneOutgoing } from "lucide-react";
 import AutoRefresh from "@/components/dashboard/AutoRefresh";
@@ -17,8 +18,10 @@ const FILTERS = [
 ] as const;
 
 export default async function CallsPage({ searchParams }: { searchParams: Promise<{ type?: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return null;
   const { type = "all" } = await searchParams;
-  const [profile, all] = await Promise.all([getProfile(), listCalls(200)]);
+  const [profile, all] = await Promise.all([getProfile(userId), listCalls(userId, 200)]);
   const tz = profile?.timezone ?? "UTC";
   const calls = type === "all" ? all : all.filter((c) => c.direction === type);
 
@@ -87,7 +90,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Promis
                         {c.summary ?? (c.mission ? `Mission: ${c.mission}` : "No summary yet.")}
                       </p>
                     </div>
-                    <div className="w-full shrink-0 text-xs font-semibold text-[color:var(--color-slate)]/50 sm:w-36 sm:text-right">
+                    <div className="w-full shrink-0 text-xs font-semibold text-[color:var(--color-slate)]/75 sm:w-36 sm:text-right">
                       {fmtDateTime(c.started_at ?? c.created_at, tz)}
                       <br />
                       {fmtDuration(c.duration_seconds)}

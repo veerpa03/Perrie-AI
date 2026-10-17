@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { Bot, LayoutDashboard, ListChecks, PhoneCall, Wand2 } from "lucide-react";
 import AutoRefresh from "@/components/dashboard/AutoRefresh";
@@ -12,9 +13,11 @@ export const metadata = { title: "Tasks — Perrie" };
 const SOURCE = { dashboard: LayoutDashboard, voice: PhoneCall, playground: Bot } as const;
 
 export default async function TasksPage() {
-  const [profile, tasks] = await Promise.all([getProfile(), listTasks(100)]);
+  const { userId } = await auth();
+  if (!userId) return null;
+  const [profile, tasks] = await Promise.all([getProfile(userId), listTasks(userId, 100)]);
   const tz = profile?.timezone ?? "UTC";
-  const withSteps = await Promise.all(tasks.map(async (t) => ({ t, steps: await listSteps(t.id) })));
+  const withSteps = await Promise.all(tasks.map(async (t) => ({ t, steps: await listSteps(userId, t.id) })));
   const live = tasks.some((t) => ["planning", "running", "waiting"].includes(t.status));
 
   return (
@@ -42,14 +45,14 @@ export default async function TasksPage() {
                     href={`/dashboard/tasks/${t.id}`}
                     className="focus-ring flex flex-wrap items-center gap-3 rounded-2xl px-3 py-3.5 transition hover:bg-white/80 sm:flex-nowrap"
                   >
-                    <Src className="h-4 w-4 shrink-0 text-[color:var(--color-slate)]/40" aria-label={`From ${t.source}`} />
+                    <Src className="h-4 w-4 shrink-0 text-[color:var(--color-slate)]/60" aria-label={`From ${t.source}`} />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-[color:var(--color-slate)]">{t.title}</p>
                       <p className="mt-0.5 line-clamp-1 text-sm text-[color:var(--color-slate)]/60">
                         {t.result_summary ?? t.error ?? t.plan_summary ?? t.request}
                       </p>
                     </div>
-                    <span className="text-xs font-semibold text-[color:var(--color-slate)]/45">
+                    <span className="text-xs font-semibold text-[color:var(--color-slate)]/75">
                       {steps.length ? `${done}/${steps.length} steps · ` : ""}
                       {fmtDateTime(t.created_at, tz)}
                     </span>

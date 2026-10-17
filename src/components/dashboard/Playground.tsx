@@ -185,7 +185,7 @@ export default function Playground({ ownerName, assistantName }: { ownerName: st
             </SoftButton>
           )}
         </div>
-        <p className="mt-4 text-xs leading-relaxed text-[color:var(--color-slate)]/55">
+        <p className="mt-4 text-xs leading-relaxed text-[color:var(--color-slate)]/75">
           Same brain, tools and guardrails as a real call — just typed instead of spoken. Everything is saved to Calls.
         </p>
       </ClayCard>
@@ -204,7 +204,7 @@ export default function Playground({ ownerName, assistantName }: { ownerName: st
           style={insetField}
         >
           {lines.length === 0 && (
-            <li className="pt-28 text-center text-sm text-[color:var(--color-slate)]/50">
+            <li className="pt-28 text-center text-sm text-[color:var(--color-slate)]/75">
               Pick who&apos;s on the call and press start.
             </li>
           )}
@@ -227,7 +227,7 @@ export default function Playground({ ownerName, assistantName }: { ownerName: st
             return (
               <li key={i} className={`flex ${agent ? "justify-end" : "justify-start"}`}>
                 <div className="max-w-[85%]">
-                  <p className={`mb-1 px-1 text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-slate)]/40 ${agent ? "text-right" : ""}`}>
+                  <p className={`mb-1 px-1 text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75 ${agent ? "text-right" : ""}`}>
                     {agent ? assistantName : otherName}
                   </p>
                   <p

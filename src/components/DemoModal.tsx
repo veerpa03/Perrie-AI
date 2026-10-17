@@ -152,8 +152,8 @@ export function DemoModalProvider({ children }: { children: React.ReactNode }) {
               </button>
             </div>
             <DemoPlanner initialId={initialId} />
-            <p className="mt-4 text-center text-xs text-[color:var(--color-slate)]/50">
-              Example workflows only — nothing here is scheduled, sent, or stored.
+            <p className="mt-4 text-center text-xs text-[color:var(--color-slate)]/75">
+              A sample walkthrough — sign in to try it with your own calendar and contacts.
             </p>
           </div>
         </div>

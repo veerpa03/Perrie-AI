@@ -252,7 +252,7 @@ function OrbitStage() {
         >
           {ORBIT_HEADLINE[0]}
           <br />
-          <span className="rainbow-text">{ORBIT_HEADLINE[1]}</span>
+          <span className="accent-text">{ORBIT_HEADLINE[1]}</span>
         </motion.h2>
         <div className="mt-3 h-7">
           <AnimatePresence mode="wait">
@@ -270,7 +270,7 @@ function OrbitStage() {
             </motion.p>
           </AnimatePresence>
         </div>
-        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--color-slate)]/45">
+        <p className="mt-1 text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--color-slate)]/75">
           Tap an icon to learn more
         </p>
       </div>
@@ -341,7 +341,7 @@ function OrbitStatic() {
         <h2 className="font-display text-center text-4xl leading-[1.05] text-[color:var(--color-slate)] sm:text-5xl">
           {ORBIT_HEADLINE[0]}
           <br />
-          <span className="rainbow-text">{ORBIT_HEADLINE[1]}</span>
+          <span className="accent-text">{ORBIT_HEADLINE[1]}</span>
         </h2>
         <ul className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2">
           {ORBIT_FEATURES.map((f) => (

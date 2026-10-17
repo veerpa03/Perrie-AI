@@ -56,12 +56,12 @@ function Table({ rows }: { rows: Record<string, unknown>[] }) {
   const keys = Array.from(new Set(rows.flatMap((r) => Object.keys(r).filter((k) => isScalar(r[k])))));
   const cols = [...PREFERRED.filter((k) => keys.includes(k)), ...keys.filter((k) => !PREFERRED.includes(k))].slice(0, 6);
   return (
-    <div className="overflow-x-auto">
+    <div className="max-h-80 overflow-auto">
       <table className="w-full text-left text-sm">
-        <thead>
+        <thead className="sticky top-0" style={{ background: "#FFFCF7" }}>
           <tr>
             {cols.map((c) => (
-              <th key={c} className="whitespace-nowrap px-2 pb-2 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">
+              <th key={c} className="whitespace-nowrap px-2 pb-2 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">
                 {c.replace(/_/g, " ")}
               </th>
             ))}
@@ -79,18 +79,18 @@ function Table({ rows }: { rows: Record<string, unknown>[] }) {
           ))}
         </tbody>
       </table>
-      {rows.length > 25 && <p className="mt-2 text-xs text-[color:var(--color-slate)]/50">+{rows.length - 25} more</p>}
+      {rows.length > 25 && <p className="mt-2 text-xs text-[color:var(--color-slate)]/75">+{rows.length - 25} more</p>}
     </div>
   );
 }
 
 export default function ResultView({ data }: { data: unknown }) {
-  if (data == null || data === "") return <p className="text-sm text-[color:var(--color-slate)]/55">Nothing returned.</p>;
+  if (data == null || data === "") return <p className="text-sm text-[color:var(--color-slate)]/75">Nothing returned.</p>;
   if (typeof data === "string") {
     return <pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-sm text-[color:var(--color-slate)]/85">{data}</pre>;
   }
   if (Array.isArray(data)) {
-    if (!data.length) return <p className="text-sm text-[color:var(--color-slate)]/55">Empty list.</p>;
+    if (!data.length) return <p className="text-sm text-[color:var(--color-slate)]/75">Empty list.</p>;
     if (data.every((r) => r && typeof r === "object" && !Array.isArray(r))) return <Table rows={data as Record<string, unknown>[]} />;
     return <pre className="text-sm">{JSON.stringify(data, null, 2)}</pre>;
   }
@@ -98,15 +98,16 @@ export default function ResultView({ data }: { data: unknown }) {
     const obj = data as Record<string, unknown>;
     const list = findList(obj);
     if (list) return <ResultView data={list} />;
-    const scalars = Object.entries(obj).filter(([, v]) => isScalar(v));
+    const scalars = Object.entries(obj).filter(([, v]) => v != null && isScalar(v));
     const nested = Object.entries(obj).filter(([, v]) => !isScalar(v));
+    if (!scalars.length && !nested.length) return <p className="text-sm text-[color:var(--color-slate)]/75">Nothing returned.</p>;
     return (
       <div className="space-y-3">
         {scalars.length > 0 && (
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
             {scalars.map(([k, v]) => (
               <div key={k} className="contents">
-                <dt className="font-bold text-[color:var(--color-slate)]/55">{k.replace(/_/g, " ")}</dt>
+                <dt className="font-bold text-[color:var(--color-slate)]/75">{k.replace(/_/g, " ")}</dt>
                 <dd className="text-[color:var(--color-slate)]/85">
                   <Cell k={k} v={v} />
                 </dd>

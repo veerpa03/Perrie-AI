@@ -1,10 +1,17 @@
 "use server";
 
+import { auth } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { hashPin } from "@/server/crypto";
 import { db, getProfile, listFacts, saveProfile } from "@/server/db";
 import { normalizePhone } from "@/server/phone";
+
+async function requireUserId(): Promise<string> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Not signed in.");
+  return userId;
+}
 
 export type FormState = { ok: boolean; message: string; errors?: Record<string, string> } | null;
 
@@ -73,7 +80,8 @@ export async function saveProfileAction(_prev: FormState, form: FormData): Promi
     pin_hash = hashPin(v.pin);
   }
 
-  await saveProfile({
+  const userId = await requireUserId();
+  await saveProfile(userId, {
     full_name: v.full_name,
     preferred_name: v.preferred_name || null,
     pronouns: v.pronouns || null,
@@ -100,29 +108,34 @@ const factSchema = z.object({
 });
 
 export async function addFactAction(_prev: FormState, form: FormData): Promise<FormState> {
-  if (!(await getProfile())) return { ok: false, message: "Save your profile first." };
+  const userId = await requireUserId();
+  if (!(await getProfile(userId))) return { ok: false, message: "Save your profile first." };
   const parsed = factSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) {
     const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] ??= issue.message;
     return { ok: false, message: "Please fix the highlighted fields.", errors };
   }
-  if ((await listFacts()).length >= 100) return { ok: false, message: "Up to 100 facts for now." };
-  await db().insert("profile_facts", parsed.data);
+  if ((await listFacts(userId)).length >= 100) return { ok: false, message: "Up to 100 facts for now." };
+  await db().insert("profile_facts", { ...parsed.data, user_id: userId });
   revalidatePath("/dashboard/profile");
   return { ok: true, message: "Added." };
 }
 
 export async function toggleFactVisibilityAction(form: FormData): Promise<void> {
+  const userId = await requireUserId();
   const id = String(form.get("id") ?? "");
   const fact = id ? await db().get("profile_facts", id) : null;
-  if (!fact) return;
+  if (!fact || fact.user_id !== userId) return;
   await db().update("profile_facts", id, { visibility: fact.visibility === "private" ? "shareable" : "private" });
   revalidatePath("/dashboard/profile");
 }
 
 export async function deleteFactAction(form: FormData): Promise<void> {
+  const userId = await requireUserId();
   const id = String(form.get("id") ?? "");
-  if (id) await db().remove("profile_facts", id);
+  const fact = id ? await db().get("profile_facts", id) : null;
+  if (!fact || fact.user_id !== userId) return;
+  await db().remove("profile_facts", id);
   revalidatePath("/dashboard/profile");
 }

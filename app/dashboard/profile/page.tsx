@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import { Megaphone } from "lucide-react";
 import FactsEditor from "@/components/dashboard/FactsEditor";
 import ProfileForm from "@/components/dashboard/ProfileForm";
@@ -15,7 +16,9 @@ function allTimezones(): string[] {
 }
 
 export default async function ProfilePage() {
-  const [profile, facts] = await Promise.all([getProfile(), listFacts()]);
+  const { userId } = await auth();
+  if (!userId) return null;
+  const [profile, facts] = await Promise.all([getProfile(userId), listFacts(userId)]);
   const tzs = allTimezones();
   const shareable = facts.filter((f) => f.visibility === "shareable");
   const name = ownerName(profile);
@@ -24,7 +27,7 @@ export default async function ProfilePage() {
     <>
       <PageHeader
         eyebrow={profile ? "Your profile" : "Step 1"}
-        title={profile ? <span className="rainbow-text">{profile.full_name}</span> : "Create your profile"}
+        title={profile ? <span className="accent-text">{profile.full_name}</span> : "Create your profile"}
         subtitle={
           profile
             ? "Everything Perrie knows about you, and who it's allowed to share it with."
@@ -78,7 +81,7 @@ export default async function ProfilePage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm font-semibold text-[color:var(--color-slate)]/55">
+              <p className="text-sm font-semibold text-[color:var(--color-slate)]/75">
                 Nothing — every fact is private. Callers can only leave a message.
               </p>
             )}

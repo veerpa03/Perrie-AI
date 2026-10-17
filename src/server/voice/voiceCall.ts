@@ -15,8 +15,34 @@ const MAX_CALL_MS = 15 * 60_000;
 const SILENCE_NUDGE_MS = 25_000;
 const SILENCE_HANGUP_MS = 45_000;
 const LOW_CONFIDENCE = 0.45;
+const RECENT_CALL_WINDOW_MS = 6 * 3600_000;
 
 export type StreamClaims = { callId: string; role: "owner" | "guest" | "delegate" };
+
+/**
+ * Has this tenant already spoken with this same counterpart in the last few
+ * hours? Used only to shorten the greeting — the AI-disclosure / transcribed
+ * notice is never dropped, just not re-explained at length every call.
+ */
+async function wasCalledRecently(userId: string, call: CallRecord): Promise<boolean> {
+  const number = call.direction === "outbound" ? call.to_number : call.from_number;
+  if (!number) return false;
+  const recent = await db().list("calls", {
+    where: { user_id: userId, direction: call.direction },
+    orderBy: "started_at",
+    ascending: false,
+    limit: 20,
+  });
+  const cutoff = Date.now() - RECENT_CALL_WINDOW_MS;
+  return recent.some(
+    (c) =>
+      c.id !== call.id &&
+      c.status === "completed" &&
+      (c.direction === "outbound" ? c.to_number : c.from_number) === number &&
+      c.started_at != null &&
+      new Date(c.started_at).getTime() > cutoff,
+  );
+}
 
 export class VoiceCall {
   private agent: AgentSession | null = null;
@@ -49,16 +75,21 @@ export class VoiceCall {
   async start() {
     this.call = await db().get("calls", this.claims.callId);
     if (!this.call) throw new Error(`Unknown call ${this.claims.callId}`);
-    const [profile, facts] = await Promise.all([getProfile(), listFacts()]);
+    if (!this.call.user_id) throw new Error(`Call ${this.claims.callId} has no owner.`);
+    const userId = this.call.user_id;
+    const [profile, facts] = await Promise.all([getProfile(userId), listFacts(userId)]);
     this.voice = profile?.assistant_voice ?? null;
 
     let callerName: string | null = null;
     if (this.claims.role === "guest" && this.call.from_number) {
-      callerName = (await lookupContactByPhone(this.call.from_number))?.name ?? null;
+      callerName = (await lookupContactByPhone(userId, this.call.from_number))?.name ?? null;
       if (callerName) await db().update("calls", this.call.id, { counterpart_name: callerName });
     }
 
+    const calledRecently = await wasCalledRecently(userId, this.call);
+
     this.agent = await AgentSession.create({
+      userId,
       role: this.claims.role,
       channel: "voice",
       callId: this.call.id,
@@ -67,6 +98,7 @@ export class VoiceCall {
       mission: this.call.mission,
       counterpartName: this.call.counterpart_name ?? callerName,
       caller: { number: this.call.direction === "inbound" ? this.call.from_number : this.call.to_number, name: callerName },
+      calledRecently,
     });
 
     await db().update("calls", this.call.id, {
@@ -127,7 +159,9 @@ export class VoiceCall {
     } catch (err) {
       if (!abort.signal.aborted) {
         console.error("[voice] agent error", err);
-        this.say("Sorry, I'm having trouble right now. Please try again in a moment.");
+        const fallback = "Sorry, I'm having trouble right now. Please try again in a moment.";
+        this.say(fallback);
+        void this.agent.logFallback(fallback);
       }
     } finally {
       if (this.responseAbort === abort) {
@@ -176,6 +210,9 @@ export class VoiceCall {
         const mark = `m${++this.markSeq}`;
         this.outstandingMarks.add(mark);
         this.send({ event: "mark", streamSid: this.streamSid, mark: { name: mark } });
+      } catch (err) {
+        // Barge-in aborts the in-flight read mid-stream; that's expected.
+        if (!abort.signal.aborted) console.error("[voice] TTS playback error", err);
       } finally {
         this.ttsAborts.delete(abort);
       }
@@ -224,7 +261,15 @@ export class VoiceCall {
     this.interrupt();
     this.hangupAfterSpeech = true;
     this.say(line);
-    await logGuardrail({ kind: "call_wrapped_up", severity: "info", detail: line, call_id: this.claims.callId });
+    if (this.call?.user_id) {
+      await logGuardrail({
+        userId: this.call.user_id,
+        kind: "call_wrapped_up",
+        severity: "info",
+        detail: line,
+        call_id: this.claims.callId,
+      });
+    }
   }
 
   private hangUp() {

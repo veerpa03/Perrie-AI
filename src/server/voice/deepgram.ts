@@ -30,7 +30,7 @@ export class DeepgramStt {
       sample_rate: "8000",
       channels: "1",
       interim_results: "true",
-      endpointing: "400",
+      endpointing: "700",
       utterance_end_ms: "1200",
       vad_events: "true",
       smart_format: "true",

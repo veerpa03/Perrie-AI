@@ -145,7 +145,7 @@ export default function FeaturePopup({ feature, onClose, onTryDemo }: Props) {
               {feature.gist}
             </p>
 
-            <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--color-slate)]/50">
+            <p className="mt-6 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--color-slate)]/75">
               For example
             </p>
             <ul className="mt-2 space-y-2">
@@ -196,8 +196,8 @@ export default function FeaturePopup({ feature, onClose, onTryDemo }: Props) {
               </button>
             </div>
 
-            <p className="mt-5 text-center text-[0.7rem] text-[color:var(--color-slate)]/50">
-              Frontend preview — nothing is scheduled, sent, or stored.
+            <p className="mt-5 text-center text-[0.7rem] text-[color:var(--color-slate)]/75">
+              A sample walkthrough — sign in to try it with your own calendar and contacts.
             </p>
           </motion.div>
         </motion.div>

@@ -206,7 +206,18 @@ export default function JourneyCanvas({
   }, [tier]);
 
   return (
-    <div ref={containerRef} className={className}>
+    <div
+      ref={containerRef}
+      className={className}
+      // Plain CSS poster of the first frame, painted immediately with no JS —
+      // covers the gap before the canvas's own first decoded frame lands, so
+      // there's never a blank/flat-color flash on load.
+      style={{
+        backgroundImage: `url(/frames/descent/${tier}/0000.webp)`,
+        backgroundSize: "cover",
+        backgroundPosition: `${JOURNEY_FOCAL.x * 100}% ${JOURNEY_FOCAL.y * 100}%`,
+      }}
+    >
       <canvas ref={canvasRef} className="h-full w-full" aria-hidden="true" />
     </div>
   );

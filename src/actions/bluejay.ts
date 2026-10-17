@@ -1,8 +1,19 @@
 "use server";
 
-import { callBluejayTool, listBluejayTools, type JsonSchema } from "@/server/integrations/bluejay";
+import { callBluejayTool, GUARDRAIL_SIMULATION_ID, listBluejayTools, type JsonSchema } from "@/server/integrations/bluejay";
 
 export type BluejayRunState = { ok: boolean; tool: string; result: unknown; message?: string } | null;
+
+/** Queue a run of the guardrail suite (the 6 guest-caller digital humans created for Perrie). */
+export async function runGuardrailSuiteAction(): Promise<BluejayRunState> {
+  const tool = "queue_simulation_run";
+  try {
+    const { data, isError } = await callBluejayTool(tool, { simulation_id: GUARDRAIL_SIMULATION_ID, channel: "voice" });
+    return { ok: !isError, tool, result: data, message: isError ? "Bluejay returned an error." : undefined };
+  } catch (err) {
+    return { ok: false, tool, result: null, message: (err as Error).message };
+  }
+}
 
 function coerce(raw: string, schema: JsonSchema | undefined): unknown {
   const t = Array.isArray(schema?.type) ? schema?.type.find((x) => x !== "null") : schema?.type;

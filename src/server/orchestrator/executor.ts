@@ -1,4 +1,3 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import {
   db,
@@ -10,7 +9,7 @@ import {
   type TaskRecord,
   type TaskStep,
 } from "../db";
-import { llm, models } from "../agent/llm";
+import { llm, models, type ToolUseBlock } from "../agent/llm";
 import { executeTool, getTool, toAnthropicTools } from "../integrations/registry";
 import { humanNow } from "../time";
 
@@ -37,20 +36,27 @@ const CANNOT_PROCEED = {
   },
 };
 
-export async function approveTask(taskId: string): Promise<TaskRecord> {
+function requireOwned(task: TaskRecord, userId: string): TaskRecord {
+  if (task.user_id !== userId) throw new Error("Task not found.");
+  return task;
+}
+
+export async function approveTask(userId: string, taskId: string): Promise<TaskRecord> {
   const task = await db().get("tasks", taskId);
   if (!task) throw new Error("Task not found.");
+  requireOwned(task, userId);
   if (task.status !== "awaiting_approval") throw new Error(`Task is ${task.status.replace("_", " ")}, not awaiting approval.`);
   const updated = await db().update("tasks", taskId, { status: "running" });
   void runTask(taskId).catch((err) => console.error("[orchestrator] run failed", err));
   return updated;
 }
 
-export async function cancelTask(taskId: string): Promise<TaskRecord> {
+export async function cancelTask(userId: string, taskId: string): Promise<TaskRecord> {
   const task = await db().get("tasks", taskId);
   if (!task) throw new Error("Task not found.");
+  requireOwned(task, userId);
   if (["completed", "failed", "canceled"].includes(task.status)) return task;
-  for (const s of await listSteps(taskId)) {
+  for (const s of await listSteps(userId, taskId)) {
     if (s.status === "pending") await db().update("task_steps", s.id, { status: "skipped" });
   }
   return db().update("tasks", taskId, { status: "canceled", completed_at: new Date().toISOString() });
@@ -76,8 +82,8 @@ export async function runTask(taskId: string): Promise<void> {
   try {
     for (let guard = 0; guard < 20; guard++) {
       const task = await db().get("tasks", taskId);
-      if (!task || !["running", "waiting"].includes(task.status)) return;
-      const steps = await listSteps(taskId);
+      if (!task || !task.user_id || !["running", "waiting"].includes(task.status)) return;
+      const steps = await listSteps(task.user_id, taskId);
 
       const failed = steps.find((s) => s.status === "failed");
       if (failed) return finish(task, steps, "failed", `${failed.title}: ${failed.error ?? "failed"}`);
@@ -104,7 +110,8 @@ export async function runTask(taskId: string): Promise<void> {
 
 async function executeStep(task: TaskRecord, step: TaskStep, steps: TaskStep[]) {
   await db().update("task_steps", step.id, { status: "running", started_at: new Date().toISOString() });
-  const profile = await getProfile();
+  if (!task.user_id) throw new Error("Task has no owner.");
+  const profile = await getProfile(task.user_id);
   const tz = profile?.timezone ?? "UTC";
   const fail = async (error: string) => {
     await db().update("task_steps", step.id, { status: "failed", error, finished_at: new Date().toISOString() });
@@ -123,6 +130,7 @@ async function executeStep(task: TaskRecord, step: TaskStep, steps: TaskStep[]) 
   }
 
   const outcome = await executeTool(step.tool, input, {
+    userId: task.user_id,
     role: "system",
     profile,
     timezone: tz,
@@ -148,7 +156,8 @@ async function resolveInput(
   tz: string,
 ): Promise<{ input: unknown } | { cannot: string }> {
   const tool = getTool(step.tool)!;
-  const [profile, facts] = await Promise.all([getProfile(), listFacts()]);
+  if (!task.user_id) throw new Error("Task has no owner.");
+  const [profile, facts] = await Promise.all([getProfile(task.user_id), listFacts(task.user_id)]);
   const deps = steps
     .filter((s) => step.depends_on.includes(s.position))
     .map((s) => `Step ${s.position} — ${s.title} (${s.tool}) result:\n${JSON.stringify(s.output ?? null)}`)
@@ -179,11 +188,12 @@ async function resolveInput(
     tools: [...toAnthropicTools([tool]), CANNOT_PROCEED],
     tool_choice: { type: "any" },
   });
-  const block = res.content.find((b): b is Anthropic.Messages.ToolUseBlock => b.type === "tool_use");
+  const block = res.content.find((b): b is ToolUseBlock => b.type === "tool_use");
   if (!block) throw new Error("no tool input returned");
   if (block.name === CANNOT_PROCEED.name) {
     const reason = String((block.input as { reason?: string }).reason ?? "Not enough information.");
     await logGuardrail({
+      userId: task.user_id,
       kind: "step_cannot_proceed",
       severity: "info",
       detail: `${step.title}: ${reason}`,
@@ -245,7 +255,8 @@ export async function resumeInterruptedTasks(): Promise<void> {
   const tasks = await db().list("tasks", { orderBy: "created_at", ascending: false, limit: 100 });
   for (const task of tasks) {
     if (task.status !== "running" && task.status !== "waiting") continue;
-    const steps = await listSteps(task.id);
+    if (!task.user_id) continue;
+    const steps = await listSteps(task.user_id, task.id);
     for (const s of steps) {
       if (s.status === "running") {
         await db().update("task_steps", s.id, {

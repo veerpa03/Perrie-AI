@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -65,21 +66,23 @@ function Stat({ icon, accent, label, value, href }: { icon: typeof PhoneCall; ac
         <p className="font-display text-3xl leading-none" style={{ color: ACCENTS[accent].ink }}>
           {value}
         </p>
-        <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/50">{label}</p>
+        <p className="mt-1 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">{label}</p>
       </div>
     </Link>
   );
 }
 
 export default async function OverviewPage() {
+  const { userId } = await auth();
+  if (!userId) return null;
   const [profile, facts, calls, tasks, messages, guardrails, statuses] = await Promise.all([
-    getProfile(),
-    listFacts(),
-    listCalls(50),
-    listTasks(20),
-    listMessages(20),
-    listGuardrails(30),
-    integrationStatuses(true),
+    getProfile(userId),
+    listFacts(userId),
+    listCalls(userId, 50),
+    listTasks(userId, 20),
+    listMessages(userId, 20),
+    listGuardrails(userId, 30),
+    integrationStatuses(userId, true),
   ]);
   const tz = profile?.timezone ?? "UTC";
   const name = ownerName(profile);
@@ -91,7 +94,7 @@ export default async function OverviewPage() {
   const live = calls.some((c) => c.status === "in-progress") || tasks.some((t) => ["planning", "running"].includes(t.status));
   const taskProgress = await Promise.all(
     activeTasks.slice(0, 4).map(async (t) => {
-      const steps = await listSteps(t.id);
+      const steps = await listSteps(userId, t.id);
       return { task: t, done: steps.filter((s) => s.status === "succeeded").length, total: steps.length };
     }),
   );
@@ -101,8 +104,13 @@ export default async function OverviewPage() {
     { label: "Create your profile", done: !!profile, hint: "Who Perrie works for", href: "/dashboard/profile" },
     { label: "Set your owner PIN", done: !!profile?.pin_hash, hint: "Unlocks owner mode on calls", href: "/dashboard/profile" },
     { label: "Add facts about you", done: facts.length > 0, hint: "What Perrie may answer", href: "/dashboard/profile" },
-    { label: "Claude (ANTHROPIC_API_KEY)", done: svc.anthropic, hint: "Conversations + planning" },
-    { label: "Twilio number", done: svc.twilio && svc.publicUrl, hint: "TWILIO_* + PUBLIC_BASE_URL" },
+    { label: "Groq (GROQ_API_KEY)", done: svc.groq, hint: "Conversations + planning" },
+    {
+      label: "Your Twilio number",
+      done: !!statuses.get("twilio")?.connected,
+      hint: "Connect your own Twilio account on Integrations",
+      href: "/dashboard/integrations",
+    },
     { label: "Deepgram voice", done: svc.deepgram, hint: "DEEPGRAM_API_KEY" },
     { label: "Supabase database", done: svc.supabase, hint: "Otherwise local dev storage" },
     {
@@ -123,11 +131,11 @@ export default async function OverviewPage() {
         title={
           profile ? (
             <>
-              Hi, <span className="rainbow-text">{name}</span>
+              Hi, <span className="accent-text">{name}</span>
             </>
           ) : (
             <>
-              Meet <span className="rainbow-text">Perrie</span>
+              Meet <span className="accent-text">Perrie</span>
             </>
           )
         }
@@ -221,7 +229,7 @@ export default async function OverviewPage() {
                             {c.summary ?? c.mission ?? "Transcript available"}
                           </p>
                         </div>
-                        <span className="shrink-0 text-right text-xs font-semibold text-[color:var(--color-slate)]/45">
+                        <span className="shrink-0 text-right text-xs font-semibold text-[color:var(--color-slate)]/75">
                           {timeAgo(c.created_at)}
                           <br />
                           {c.duration_seconds != null ? fmtDuration(c.duration_seconds) : ""}
@@ -267,7 +275,7 @@ export default async function OverviewPage() {
                           }}
                         />
                       </div>
-                      <p className="mt-1.5 text-xs font-semibold text-[color:var(--color-slate)]/50">
+                      <p className="mt-1.5 text-xs font-semibold text-[color:var(--color-slate)]/75">
                         {total ? `${done} of ${total} steps` : "Planning…"}
                       </p>
                     </Link>
@@ -295,12 +303,12 @@ export default async function OverviewPage() {
                       <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-[color:var(--color-slate)]">
                         {m.from_name ?? "Unknown caller"}
                         {m.from_number && (
-                          <span className="font-semibold text-[color:var(--color-slate)]/50">{prettyPhone(m.from_number)}</span>
+                          <span className="font-semibold text-[color:var(--color-slate)]/75">{prettyPhone(m.from_number)}</span>
                         )}
                         {m.urgency === "high" && <Pill tone="coral">Urgent</Pill>}
                       </p>
                       <p className="mt-1 text-sm text-[color:var(--color-slate)]/80">{m.body}</p>
-                      <p className="mt-1 text-xs text-[color:var(--color-slate)]/45">
+                      <p className="mt-1 text-xs text-[color:var(--color-slate)]/75">
                         {timeAgo(m.created_at)}
                         {m.call_id && (
                           <>
@@ -316,7 +324,7 @@ export default async function OverviewPage() {
                       <input type="hidden" name="id" value={m.id} />
                       <button
                         type="submit"
-                        className="focus-ring rounded-full p-1.5 text-[color:var(--color-slate)]/45 hover:text-[color:var(--color-slate)]"
+                        className="focus-ring rounded-full p-1.5 text-[color:var(--color-slate)]/75 hover:text-[color:var(--color-slate)]"
                         aria-label={m.read ? "Mark as unread" : "Mark as read"}
                         title={m.read ? "Mark as unread" : "Mark as read"}
                       >
@@ -349,16 +357,16 @@ export default async function OverviewPage() {
                         <Check className="h-3.5 w-3.5" strokeWidth={3} />
                       </span>
                     ) : (
-                      <CircleDashed className="h-6 w-6 text-[color:var(--color-slate)]/30" aria-hidden="true" />
+                      <CircleDashed className="h-6 w-6 text-[color:var(--color-slate)]/60" aria-hidden="true" />
                     )}
                     <span className="min-w-0">
                       <span
-                        className={`block text-sm font-bold ${c.done ? "text-[color:var(--color-slate)]/55 line-through decoration-2" : "text-[color:var(--color-slate)]"}`}
+                        className={`block text-sm font-bold ${c.done ? "text-[color:var(--color-slate)]/75 line-through decoration-2" : "text-[color:var(--color-slate)]"}`}
                       >
                         {c.label}
                         <span className="sr-only">{c.done ? " (done)" : " (to do)"}</span>
                       </span>
-                      <span className="block text-xs text-[color:var(--color-slate)]/50">{c.hint}</span>
+                      <span className="block text-xs text-[color:var(--color-slate)]/75">{c.hint}</span>
                     </span>
                   </span>
                 );
@@ -375,7 +383,7 @@ export default async function OverviewPage() {
                 );
               })}
             </ul>
-            <p className="mt-3 text-xs text-[color:var(--color-slate)]/50">
+            <p className="mt-3 text-xs text-[color:var(--color-slate)]/75">
               Keys go in <code className="font-bold">.env.local</code> — see <code className="font-bold">.env.example</code>.
             </p>
           </ClayCard>
@@ -421,11 +429,11 @@ export default async function OverviewPage() {
                   <li key={g.id} className="rounded-2xl px-3 py-2.5" style={{ background: "rgba(255,255,255,0.6)" }}>
                     <div className="flex items-center justify-between gap-2">
                       <SeverityBadge severity={g.severity} />
-                      <span className="text-xs text-[color:var(--color-slate)]/45">{timeAgo(g.created_at)}</span>
+                      <span className="text-xs text-[color:var(--color-slate)]/75">{timeAgo(g.created_at)}</span>
                     </div>
                     <p className="mt-1 text-sm text-[color:var(--color-slate)]/80">{g.detail}</p>
                     {g.call_id && (
-                      <Link href={`/dashboard/calls/${g.call_id}`} className="text-xs font-bold text-[color:var(--color-slate)]/55 hover:underline">
+                      <Link href={`/dashboard/calls/${g.call_id}`} className="text-xs font-bold text-[color:var(--color-slate)]/75 hover:underline">
                         View call
                       </Link>
                     )}

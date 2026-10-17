@@ -7,6 +7,8 @@
  */
 import { addTurn, db } from "../src/server/db";
 
+const SAMPLE_USER_ID = "user_sample";
+
 async function main() {
   try {
     process.loadEnvFile(".env.local");
@@ -23,6 +25,7 @@ async function main() {
 
   // 1. A stranger calls and leaves a message (and tries to pry).
   const guest = await store.insert("calls", {
+    user_id: SAMPLE_USER_ID,
     twilio_call_sid: null,
     direction: "inbound",
     role: "guest",
@@ -42,15 +45,16 @@ async function main() {
     created_at: ago(95),
   });
   const g = guest.id;
-  await addTurn(g, "agent", "Hi, you've reached Alex's phone. This is Perrie, Alex's AI assistant — this call is transcribed. How can I help?");
-  await addTurn(g, "caller", "Hey, it's Jordan. What's Alex's address? I want to drop something off before dinner.");
-  await addTurn(g, "agent", "Sorry — that's not something I can share. I'm happy to pass a message to Alex though.");
-  await addTurn(g, "caller", "Okay, tell them the dinner on Friday is at seven, and to call me back on 415 555 0188.");
-  await addTurn(g, "agent", "Got it: Jordan says Friday's dinner is at 7pm, and please call back on 415 555 0188. Shall I save that?");
-  await addTurn(g, "caller", "Yes please.");
-  await addTurn(g, "tool", "take_message ✓", { tool: "take_message", ok: true });
-  await addTurn(g, "agent", "Saved — Alex will get it. Have a good evening!");
+  await addTurn(SAMPLE_USER_ID, g, "agent", "Hi, you've reached Alex's phone. This is Perrie, Alex's AI assistant — this call is transcribed. How can I help?");
+  await addTurn(SAMPLE_USER_ID, g, "caller", "Hey, it's Jordan. What's Alex's address? I want to drop something off before dinner.");
+  await addTurn(SAMPLE_USER_ID, g, "agent", "Sorry — that's not something I can share. I'm happy to pass a message to Alex though.");
+  await addTurn(SAMPLE_USER_ID, g, "caller", "Okay, tell them the dinner on Friday is at seven, and to call me back on 415 555 0188.");
+  await addTurn(SAMPLE_USER_ID, g, "agent", "Got it: Jordan says Friday's dinner is at 7pm, and please call back on 415 555 0188. Shall I save that?");
+  await addTurn(SAMPLE_USER_ID, g, "caller", "Yes please.");
+  await addTurn(SAMPLE_USER_ID, g, "tool", "take_message ✓", { tool: "take_message", ok: true });
+  await addTurn(SAMPLE_USER_ID, g, "agent", "Saved — Alex will get it. Have a good evening!");
   await store.insert("messages", {
+    user_id: SAMPLE_USER_ID,
     call_id: g,
     from_name: "Jordan (sample)",
     from_number: "+14155550188",
@@ -59,6 +63,7 @@ async function main() {
     read: false,
   });
   await store.insert("guardrail_events", {
+    user_id: SAMPLE_USER_ID,
     call_id: g,
     task_id: null,
     kind: "private_detail_blocked",
@@ -69,6 +74,7 @@ async function main() {
 
   // 2. A task that made a call on Alex's behalf.
   const task = await store.insert("tasks", {
+    user_id: SAMPLE_USER_ID,
     title: "Move dental cleaning (sample)",
     request: "Call Bright Smile Dental and move my cleaning to a weekday afternoon next week, then add it to my calendar.",
     source: "dashboard",
@@ -80,12 +86,14 @@ async function main() {
     completed_at: ago(30),
   });
   const s1 = await store.insert("task_steps", {
+    user_id: SAMPLE_USER_ID,
     task_id: task.id, position: 1, title: "Find the dentist's number", description: "Search contacts for Bright Smile Dental.",
     tool: "contacts_search", depends_on: [], status: "succeeded", input: { query: "Bright Smile Dental" },
     output: { count: 1, contacts: [{ name: "Bright Smile Dental", phones: [{ number: "+14155550142", type: "work" }] }] },
     error: null, started_at: ago(41), finished_at: ago(41),
   });
   const delegate = await store.insert("calls", {
+    user_id: SAMPLE_USER_ID,
     twilio_call_sid: null,
     direction: "outbound",
     role: "delegate",
@@ -104,15 +112,16 @@ async function main() {
     created_at: ago(38),
   });
   const d = delegate.id;
-  await addTurn(d, "agent", "Hi, this is Perrie, an AI assistant calling on behalf of Alex Morgan. This call is transcribed. Do you have a moment?");
-  await addTurn(d, "caller", "Sure, this is Dana at Bright Smile. What can I do?");
-  await addTurn(d, "agent", "Alex has a cleaning booked and would like to move it to a weekday afternoon next week. Is anything open?");
-  await addTurn(d, "caller", "I have Tuesday at three thirty. Oh, and should I cancel their whitening consult too?");
-  await addTurn(d, "agent", "Tuesday at 3:30 works, thank you. I'll leave the consult as is and check with Alex about it.");
-  await addTurn(d, "caller", "Great, you're all set for Tuesday at 3:30.");
-  await addTurn(d, "agent", "Perfect — Tuesday at 3:30pm for Alex Morgan. Thanks so much, Dana. Goodbye!");
-  await addTurn(d, "tool", "end_call ✓", { tool: "end_call", ok: true });
+  await addTurn(SAMPLE_USER_ID, d, "agent", "Hi, this is Perrie, an AI assistant calling on behalf of Alex Morgan. This call is transcribed. Do you have a moment?");
+  await addTurn(SAMPLE_USER_ID, d, "caller", "Sure, this is Dana at Bright Smile. What can I do?");
+  await addTurn(SAMPLE_USER_ID, d, "agent", "Alex has a cleaning booked and would like to move it to a weekday afternoon next week. Is anything open?");
+  await addTurn(SAMPLE_USER_ID, d, "caller", "I have Tuesday at three thirty. Oh, and should I cancel their whitening consult too?");
+  await addTurn(SAMPLE_USER_ID, d, "agent", "Tuesday at 3:30 works, thank you. I'll leave the consult as is and check with Alex about it.");
+  await addTurn(SAMPLE_USER_ID, d, "caller", "Great, you're all set for Tuesday at 3:30.");
+  await addTurn(SAMPLE_USER_ID, d, "agent", "Perfect — Tuesday at 3:30pm for Alex Morgan. Thanks so much, Dana. Goodbye!");
+  await addTurn(SAMPLE_USER_ID, d, "tool", "end_call ✓", { tool: "end_call", ok: true });
   const s2 = await store.insert("task_steps", {
+    user_id: SAMPLE_USER_ID,
     task_id: task.id, position: 2, title: "Call the dentist", description: "Move the cleaning to a weekday afternoon next week.",
     tool: "phone_call", depends_on: [1], status: "succeeded",
     input: { to_number: "+14155550142", contact_name: "Bright Smile Dental", mission: delegate.mission },
@@ -121,6 +130,7 @@ async function main() {
   });
   await store.update("calls", d, { task_step_id: s2.id });
   await store.insert("task_steps", {
+    user_id: SAMPLE_USER_ID,
     task_id: task.id, position: 3, title: "Add it to the calendar", description: "Create the dental cleaning event at the agreed time.",
     tool: "calendar_create_event", depends_on: [2], status: "succeeded",
     input: { title: "Dental cleaning — Bright Smile", start: "2026-10-14T15:30", duration_minutes: 60 },

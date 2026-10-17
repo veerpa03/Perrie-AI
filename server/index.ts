@@ -9,11 +9,13 @@
 import { createServer } from "node:http";
 import next from "next";
 import { WebSocketServer } from "ws";
-import { guardRequest } from "./access";
 
 const dev = process.env.NODE_ENV !== "production";
 const port = Number(process.env.PORT ?? 3000);
-const hostname = process.env.HOST ?? "localhost";
+// Container platforms (Railway, Render, Fly, Docker) route traffic to
+// 0.0.0.0, not localhost — binding to localhost silently makes the app
+// unreachable from outside the container despite logging as "ready".
+const hostname = process.env.HOST ?? (dev ? "localhost" : "0.0.0.0");
 
 async function main() {
   const app = next({ dev, hostname, port });
@@ -28,8 +30,9 @@ async function main() {
   const wss = new WebSocketServer({ noServer: true });
 
   const server = createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    if (!guardRequest(req, res, url.pathname)) return;
+    // Auth for /dashboard and /api/playground is enforced by Next's own
+    // middleware.ts (clerkMiddleware) further in, not here — this just
+    // dispatches to Next.
     void handle(req, res);
   });
 

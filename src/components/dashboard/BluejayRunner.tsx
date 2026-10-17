@@ -18,7 +18,7 @@ export default function BluejayRunner({ groups, initialTool }: { groups: Grouped
   const props = Object.entries(tool?.inputSchema?.properties ?? {});
   const required = new Set(tool?.inputSchema?.required ?? []);
 
-  if (!all.length) return <p className="text-sm text-[color:var(--color-slate)]/55">Bluejay didn&apos;t list any tools.</p>;
+  if (!all.length) return <p className="text-sm text-[color:var(--color-slate)]/75">Bluejay didn&apos;t list any tools.</p>;
 
   return (
     <div className="space-y-4">
@@ -45,7 +45,7 @@ export default function BluejayRunner({ groups, initialTool }: { groups: Grouped
 
       <form action={action} key={name} className="space-y-3" aria-label={`Run ${name}`}>
         <input type="hidden" name="__tool" value={name} />
-        {props.length === 0 && <p className="text-xs text-[color:var(--color-slate)]/55">No inputs needed.</p>}
+        {props.length === 0 && <p className="text-xs text-[color:var(--color-slate)]/75">No inputs needed.</p>}
         {props.map(([key, schema]) => {
           const id = `bj-arg-${key}`;
           const type = Array.isArray(schema.type) ? schema.type.find((x) => x !== "null") : schema.type;
@@ -86,7 +86,7 @@ export default function BluejayRunner({ groups, initialTool }: { groups: Grouped
                   style={insetField}
                 />
               )}
-              {schema.description && <p className="mt-1 text-xs text-[color:var(--color-slate)]/50">{schema.description}</p>}
+              {schema.description && <p className="mt-1 text-xs text-[color:var(--color-slate)]/75">{schema.description}</p>}
             </div>
           );
         })}
@@ -98,7 +98,7 @@ export default function BluejayRunner({ groups, initialTool }: { groups: Grouped
 
       {state && (
         <div className="rounded-3xl p-4" style={{ background: state.ok ? "rgba(221,245,236,0.6)" : "rgba(255,231,227,0.7)" }} aria-live="polite">
-          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/55">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">
             {state.tool} {state.ok ? "· result" : "· failed"}
           </p>
           {state.message && <p className="mb-2 text-sm font-bold text-[#B5403A]">{state.message}</p>}

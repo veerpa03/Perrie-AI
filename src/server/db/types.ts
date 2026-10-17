@@ -4,7 +4,13 @@
  * Keep in sync with supabase/migrations/*.sql.
  */
 
-type Base = { id: string; created_at: string; updated_at: string };
+/**
+ * `user_id` is a Clerk user id. Nullable at the DB level only so existing
+ * pre-multi-tenant rows don't break the migration — the app layer always
+ * supplies it on insert (Insert<T> below requires it) and every read/update/
+ * remove is scoped by it (see src/server/db/index.ts).
+ */
+type Base = { id: string; user_id: string | null; created_at: string; updated_at: string };
 type Json = Record<string, unknown>;
 
 export type Visibility = "private" | "shareable";
@@ -31,6 +37,12 @@ export interface OwnerProfile extends Base {
   assistant_name: string;
   assistant_voice: string | null;
   rules: string[];
+  /**
+   * The Twilio number Perrie answers on for this tenant. Null falls back to
+   * the single global TWILIO_PHONE_NUMBER env var (today's only real
+   * tenant) — see getProfileByPhoneNumber in src/server/db/index.ts.
+   */
+  assistant_phone_number: string | null;
 }
 
 export interface ProfileFact extends Base {
@@ -41,6 +53,8 @@ export interface ProfileFact extends Base {
 }
 
 export interface IntegrationRecord extends Base {
+  /** Integration slug, e.g. "google_calendar" — matches IntegrationDef.id. Unique per (user_id, integration). */
+  integration: string;
   status: "connected" | "disconnected" | "error";
   account_label: string | null;
   scopes: string[];
@@ -134,9 +148,13 @@ export interface Tables {
 
 export type TableName = keyof Tables;
 export type Row<T extends TableName> = Tables[T];
-/** Insert shape: id/timestamps optional, everything else as declared. */
-export type Insert<T extends TableName> = Omit<Row<T>, "id" | "created_at" | "updated_at"> &
-  Partial<Pick<Row<T>, "id" | "created_at">>;
+/**
+ * Insert shape: id/timestamps optional, everything else as declared —
+ * except `user_id`, which every insert must supply as a real string (the
+ * column stays nullable at the DB level only for pre-multi-tenant rows).
+ */
+export type Insert<T extends TableName> = Omit<Row<T>, "id" | "created_at" | "updated_at" | "user_id"> &
+  Partial<Pick<Row<T>, "id" | "created_at">> & { user_id: string };
 export type Patch<T extends TableName> = Partial<Omit<Row<T>, "id" | "created_at" | "updated_at">>;
 
 export interface ListOptions<T extends TableName> {

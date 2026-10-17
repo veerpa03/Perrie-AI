@@ -1,16 +1,23 @@
 import { db, findCallBySid } from "@/server/db";
+import { getTwilioCredentials } from "@/server/integrations/twilioCreds";
 import { finalizeCallOnce } from "@/server/voice/finalize";
-import { readTwilioWebhook } from "@/server/voice/twiml";
+import { readTwilioWebhook, verifyTwilioSignature } from "@/server/voice/twiml";
 
 const TERMINAL = new Set(["completed", "busy", "no-answer", "failed", "canceled"]);
 
-/** Twilio call status callback (set automatically for calls Perrie places). */
+/**
+ * Twilio call status callback — only sent for calls Perrie places (see
+ * startOutboundCall), so the call row (and its tenant) always exists by now.
+ */
 export async function POST(req: Request) {
   const parsed = await readTwilioWebhook(req);
   if (parsed instanceof Response) return parsed;
-  const { params } = parsed;
+  const { params, url } = parsed;
   const call = await findCallBySid(params.CallSid ?? "");
-  if (!call) return new Response(null, { status: 204 });
+  if (!call || !call.user_id) return new Response(null, { status: 204 });
+  const creds = await getTwilioCredentials(call.user_id);
+  const forbidden = verifyTwilioSignature(req, url, params, creds?.authToken);
+  if (forbidden) return forbidden;
 
   const status = params.CallStatus ?? call.status;
   const terminal = TERMINAL.has(status);

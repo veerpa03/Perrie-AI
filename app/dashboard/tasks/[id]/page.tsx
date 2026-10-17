@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, CheckCircle2, CircleAlert, ListChecks, Play, PhoneCall, RotateCcw, Sparkles, X } from "lucide-react";
@@ -24,10 +25,12 @@ function Data({ label, value }: { label: string; value: unknown }) {
 }
 
 export default async function TaskDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return null;
   const { id } = await params;
   const task = await db().get("tasks", id);
-  if (!task) notFound();
-  const [profile, steps] = await Promise.all([getProfile(), listSteps(id)]);
+  if (!task || task.user_id !== userId) notFound();
+  const [profile, steps] = await Promise.all([getProfile(userId), listSteps(userId, id)]);
   const tz = profile?.timezone ?? "UTC";
   const terminal = ["completed", "failed", "canceled"].includes(task.status);
   const live = ["planning", "running", "waiting"].includes(task.status);
@@ -37,7 +40,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
       <AutoRefresh active={live} everyMs={2500} />
       <Link
         href="/dashboard/tasks"
-        className="focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/55 hover:text-[color:var(--color-slate)]"
+        className="focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/75 hover:text-[color:var(--color-slate)]"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> All tasks
       </Link>
@@ -147,7 +150,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
                       </div>
                       <p className="mt-1.5 text-sm leading-relaxed text-[color:var(--color-slate)]/70">{s.description}</p>
                       {s.depends_on.length > 0 && (
-                        <p className="mt-1 text-xs font-semibold text-[color:var(--color-slate)]/45">
+                        <p className="mt-1 text-xs font-semibold text-[color:var(--color-slate)]/75">
                           Uses results of step {s.depends_on.join(", ")}
                         </p>
                       )}
@@ -169,7 +172,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ id:
               })}
             </ol>
           ) : (
-            <p className="text-sm text-[color:var(--color-slate)]/55">
+            <p className="text-sm text-[color:var(--color-slate)]/75">
               {task.status === "planning" ? "Steps appear once the plan is ready." : "No steps."}
             </p>
           )}

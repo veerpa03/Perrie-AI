@@ -18,6 +18,7 @@ import type { OwnerProfile } from "../db/types";
 export type AgentRole = "owner" | "system" | "delegate" | "guest";
 
 export interface ToolContext {
+  userId: string;
   role: AgentRole;
   profile: OwnerProfile | null;
   timezone: string;
@@ -82,7 +83,8 @@ export interface IntegrationDef {
   connect:
     | { kind: "oauth"; provider: "google"; scopes: string[] }
     | { kind: "env"; vars: string[] }
-    | { kind: "builtin" };
-  status(): Promise<IntegrationStatus>;
+    | { kind: "builtin" }
+    | { kind: "credentials"; fields: { name: string; label: string; placeholder?: string; secret?: boolean }[] };
+  status(userId: string): Promise<IntegrationStatus>;
   tools: AnyTool[];
 }

@@ -10,24 +10,18 @@ export function isolate() {
     "SUPABASE_URL",
     "SUPABASE_SECRET_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
-    "ANTHROPIC_API_KEY",
-    "TWILIO_ACCOUNT_SID",
-    "TWILIO_AUTH_TOKEN",
-    "TWILIO_PHONE_NUMBER",
+    "GROQ_API_KEY",
     "PUBLIC_BASE_URL",
     "DEEPGRAM_API_KEY",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
     "BLUEJAY_API_KEY",
-    "DASHBOARD_PASSWORD",
   ])
     delete process.env[k];
 }
 
-export function enableTwilio(captured: { url: string; body: string }[]) {
-  process.env.TWILIO_ACCOUNT_SID = "ACtest";
-  process.env.TWILIO_AUTH_TOKEN = "authtoken";
-  process.env.TWILIO_PHONE_NUMBER = "+14155550100";
+/** Twilio is per-tenant now (see src/server/integrations/twilioCreds.ts) — write the connected row directly rather than going through the live-API verify() step. */
+export async function enableTwilio(userId: string, captured: { url: string; body: string }[]) {
   process.env.PUBLIC_BASE_URL = "https://perrie.example";
   globalThis.fetch = (async (url: string | URL, init?: RequestInit) => {
     const u = String(url);
@@ -37,11 +31,23 @@ export function enableTwilio(captured: { url: string; body: string }[]) {
     }
     throw new Error(`Unexpected fetch in test: ${u}`);
   }) as typeof fetch;
+  const { encryptJSON } = await import("../src/server/crypto");
+  const { db } = await import("../src/server/db");
+  await db().insert("integrations", {
+    user_id: userId,
+    integration: "twilio",
+    status: "connected",
+    account_label: "+14155550100",
+    scopes: [],
+    credentials_enc: encryptJSON({ accountSid: "ACtest", authToken: "authtoken", phoneNumber: "+14155550100" }),
+    meta: {},
+    connected_at: new Date().toISOString(),
+  });
 }
 
 type Step = { text?: string; tools?: { name: string; input: unknown }[] };
 
-/** Scripted stand-in for the Anthropic client (stream + create). */
+/** Scripted stand-in for the Groq-backed llm() client (stream + create). */
 export function fakeLlm(script: Step[]) {
   const requests: Record<string, unknown>[] = [];
   let n = 0;
@@ -74,7 +80,7 @@ export function fakeLlm(script: Step[]) {
       },
     },
   };
-  process.env.ANTHROPIC_API_KEY = "test-key";
-  (globalThis as unknown as { __perrieAnthropic: unknown }).__perrieAnthropic = { key: "test-key", client };
+  process.env.GROQ_API_KEY = "test-key";
+  (globalThis as unknown as { __perrieLlmOverride: unknown }).__perrieLlmOverride = client;
   return { requests, script };
 }

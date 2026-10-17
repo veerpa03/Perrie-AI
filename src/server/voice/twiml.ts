@@ -1,5 +1,4 @@
 import { signToken } from "../crypto";
-import { logGuardrail } from "../db";
 import { env } from "../env";
 import { isValidTwilioSignature } from "../integrations/twilio";
 
@@ -27,24 +26,31 @@ export function connectStream(callId: string, role: "owner" | "guest" | "delegat
 }
 
 /**
- * Parse a Twilio webhook and verify X-Twilio-Signature against the public
- * URL Twilio called. Returns the params, or a 403 Response.
+ * Parse a Twilio webhook's form body. Does NOT verify the signature — Twilio
+ * credentials are per-tenant now (see twilioCreds.ts), so there is no single
+ * auth token to check against until the route resolves which tenant this
+ * request belongs to. Every route MUST call verifyTwilioSignature once it
+ * knows the tenant's auth token, before trusting params or acting on them.
  */
 export async function readTwilioWebhook(req: Request): Promise<{ params: Record<string, string>; url: URL } | Response> {
   const url = new URL(req.url);
-  const base = env.publicBaseUrl();
-  if (!base || !env.twilio()) return new Response("Twilio is not configured", { status: 503 });
+  if (!env.publicBaseUrl()) return new Response("PUBLIC_BASE_URL is not set", { status: 503 });
   const form = await req.formData();
   const params: Record<string, string> = {};
   for (const [k, v] of form.entries()) if (typeof v === "string") params[k] = v;
-  const ok = isValidTwilioSignature(`${base}${url.pathname}${url.search}`, params, req.headers.get("x-twilio-signature"));
-  if (!ok) {
-    await logGuardrail({
-      kind: "twilio_signature_invalid",
-      severity: "block",
-      detail: `Rejected a request to ${url.pathname} that wasn't signed by Twilio.`,
-    });
-    return new Response("Forbidden", { status: 403 });
-  }
   return { params, url };
+}
+
+/** Call once the tenant (and so their Twilio auth token) is known. Returns a 403 Response on failure, null on success. */
+export function verifyTwilioSignature(
+  req: Request,
+  url: URL,
+  params: Record<string, string>,
+  authToken: string | null | undefined,
+): Response | null {
+  const base = env.publicBaseUrl()!;
+  const ok = isValidTwilioSignature(`${base}${url.pathname}${url.search}`, params, req.headers.get("x-twilio-signature"), authToken);
+  if (ok) return null;
+  console.warn(`[twilio] rejected a request to ${url.pathname} that wasn't signed by Twilio`);
+  return new Response("Forbidden", { status: 403 });
 }

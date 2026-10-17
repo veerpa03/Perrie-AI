@@ -41,7 +41,7 @@ export default function FactsEditor({ facts, disabled }: { facts: FactView[]; di
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 text-sm font-bold text-[color:var(--color-slate)]">
                   {f.label}
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--color-slate)]/40">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--color-slate)]/75">
                     {f.category}
                   </span>
                 </p>
@@ -70,7 +70,7 @@ export default function FactsEditor({ facts, disabled }: { facts: FactView[]; di
                 <input type="hidden" name="id" value={f.id} />
                 <button
                   type="submit"
-                  className="focus-ring rounded-full p-1 text-[color:var(--color-slate)]/40 transition hover:text-[#B5403A]"
+                  className="focus-ring rounded-full p-1 text-[color:var(--color-slate)]/60 transition hover:text-[#B5403A]"
                   aria-label={`Delete ${f.label}`}
                 >
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -139,7 +139,7 @@ export default function FactsEditor({ facts, disabled }: { facts: FactView[]; di
           </div>
         </fieldset>
         {disabled && (
-          <p className="text-xs font-semibold text-[color:var(--color-slate)]/55">Create your profile first to add facts.</p>
+          <p className="text-xs font-semibold text-[color:var(--color-slate)]/75">Create your profile first to add facts.</p>
         )}
         <p role="status" aria-live="polite" className={`text-xs font-bold ${state?.ok ? "text-[#1C7F62]" : "text-[#B5403A]"}`}>
           {state && !state.ok ? state.message : ""}

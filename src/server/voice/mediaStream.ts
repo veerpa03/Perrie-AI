@@ -1,6 +1,5 @@
 import type { WebSocket } from "ws";
 import { verifyToken } from "../crypto";
-import { logGuardrail } from "../db";
 import { VoiceCall, type StreamClaims } from "./voiceCall";
 
 /**
@@ -33,11 +32,8 @@ export function handleMediaStream(ws: WebSocket) {
         clearTimeout(authTimer);
         const claims = verifyToken<StreamClaims & Record<string, unknown>>(msg.start?.customParameters?.token);
         if (!claims || !claims.callId || !["owner", "guest", "delegate"].includes(claims.role)) {
-          void logGuardrail({
-            kind: "stream_rejected",
-            severity: "block",
-            detail: "A media stream connected without a valid token and was refused.",
-          });
+          // No valid tenant to attribute this to — not written to guardrail_events.
+          console.warn("[voice] media stream connected without a valid token and was refused");
           ws.close(1008, "unauthorised");
           return;
         }

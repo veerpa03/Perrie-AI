@@ -6,10 +6,22 @@ import Footer from "@/components/Footer";
 import AnimatedSignInButton from "@/components/AnimatedSignInButton";
 import FloatingSoundToggle from "@/components/FloatingSoundToggle";
 import { LiquidGlassDefs } from "@/components/ui/liquid-glass";
+import { siteUrl } from "@/lib/site";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Perrie",
+  applicationCategory: "PersonalAssistantApplication",
+  operatingSystem: "Web, iOS, Android",
+  description: "Meet Perrie, your personal AI assistant. Tell it what you need, and keep your day moving.",
+  url: siteUrl(),
+};
 
 export default function Home() {
   return (
     <SiteProviders>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <LiquidGlassDefs />
       {/* The landing page's only chrome: one Sign-in control (upper-right) and
           a small sound toggle (lower-left). No navbar, links, or wordmark. */}

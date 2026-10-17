@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -24,13 +25,15 @@ export const metadata = { title: "Call — Perrie" };
 type Outcome = { achieved?: boolean | null; key_points?: string[]; agreed_time?: string | null; follow_ups?: string[] };
 
 export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { userId } = await auth();
+  if (!userId) return null;
   const { id } = await params;
   const call = await db().get("calls", id);
-  if (!call) notFound();
+  if (!call || call.user_id !== userId) notFound();
   const [profile, turns, guardrails, task] = await Promise.all([
-    getProfile(),
-    listTurns(id),
-    db().list("guardrail_events", { where: { call_id: id }, orderBy: "created_at" }),
+    getProfile(userId),
+    listTurns(userId, id),
+    db().list("guardrail_events", { where: { user_id: userId, call_id: id }, orderBy: "created_at" }),
     call.task_id ? db().get("tasks", call.task_id) : Promise.resolve(null),
   ]);
   const tz = profile?.timezone ?? "UTC";
@@ -50,7 +53,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
       <AutoRefresh active={call.status === "in-progress" || (!!call.ended_at && !call.summary)} everyMs={3000} />
       <Link
         href="/dashboard/calls"
-        className="focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/55 hover:text-[color:var(--color-slate)]"
+        className="focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full text-sm font-bold text-[color:var(--color-slate)]/75 hover:text-[color:var(--color-slate)]"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden="true" /> All calls
       </Link>
@@ -79,7 +82,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             {call.summary ? (
               <p className="leading-relaxed text-[color:var(--color-slate)]/85">{call.summary}</p>
             ) : (
-              <p className="text-sm text-[color:var(--color-slate)]/55">
+              <p className="text-sm text-[color:var(--color-slate)]/75">
                 {call.status === "in-progress" ? "The call is live — a summary appears when it ends." : "No summary yet."}
               </p>
             )}
@@ -94,7 +97,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             )}
             {!!outcome.key_points?.length && (
               <div className="mt-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">Key details</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">Key details</h3>
                 <ul className="mt-2 space-y-1.5 text-sm text-[color:var(--color-slate)]/85">
                   {outcome.key_points.map((k, i) => (
                     <li key={i} className="flex gap-2">
@@ -112,7 +115,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
             )}
             {!!outcome.follow_ups?.length && (
               <div className="mt-4">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/45">For you to follow up</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">For you to follow up</h3>
                 <ul className="mt-2 space-y-1.5 text-sm text-[color:var(--color-slate)]/85">
                   {outcome.follow_ups.map((k, i) => (
                     <li key={i} className="flex gap-2">
@@ -150,7 +153,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-[color:var(--color-slate)]/55">Nothing needed stopping on this call.</p>
+              <p className="text-sm text-[color:var(--color-slate)]/75">Nothing needed stopping on this call.</p>
             )}
           </ClayCard>
         </div>
@@ -178,7 +181,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
                 return (
                   <li key={t.id} className={`flex ${agent ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[85%] ${agent ? "text-right" : "text-left"}`}>
-                      <p className="mb-1 px-1 text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-slate)]/40">
+                      <p className="mb-1 px-1 text-[11px] font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">
                         {agent ? assistant : otherLabel} · {fmtTime(t.created_at, tz)}
                       </p>
                       <p
@@ -205,7 +208,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
               })}
             </ol>
           ) : (
-            <p className="text-sm text-[color:var(--color-slate)]/55">No transcript recorded.</p>
+            <p className="text-sm text-[color:var(--color-slate)]/75">No transcript recorded.</p>
           )}
         </ClayCard>
       </div>

@@ -111,12 +111,41 @@ h1, h2, h3, h4, .font-heading {
     radial-gradient(26% 30% at 100% 56%, rgba(255, 208, 138, 0.3), transparent 70%);
 }
 
-/* Soft rainbow accent used for the orbit ring, wordmark and highlights. */
-.rainbow-text {
-  background: linear-gradient(90deg, #9277EA, #EC6FA6, #F0A23A, #3FBF9B, #5BA7DE);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+/* Readable long-form layout for the legal pages (Privacy, Terms) — no
+   typography plugin installed, so spacing is set by hand here. */
+.legal-prose h2 {
+  margin-top: 2rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-slate);
+}
+.legal-prose h2:first-child {
+  margin-top: 0;
+}
+.legal-prose p,
+.legal-prose li {
+  margin-top: 0.75rem;
+  line-height: 1.7;
+  font-size: 0.9375rem;
+}
+.legal-prose ul {
+  margin-top: 0.75rem;
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.legal-prose li {
+  margin-top: 0.375rem;
+}
+.legal-prose a {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Solid brand accent used for the wordmark, names, and highlights. */
+.accent-text {
+  color: var(--color-teal-deep);
 }
 
 /* Soft inflated clay surface. */

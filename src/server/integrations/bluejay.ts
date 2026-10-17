@@ -23,6 +23,17 @@ export type JsonSchema = {
   items?: JsonSchema;
 };
 
+/**
+ * Bluejay agent/simulation created for Perrie's guest-caller guardrails
+ * (agent 176701, "Perrie (guest line)", PHONE connection to TWILIO_PHONE_NUMBER).
+ * Covers the inbound scenarios: privacy refusal, impersonation resistance,
+ * prompt-injection resistance, message-taking accuracy, unknown-fact honesty,
+ * noisy-line handling. The two outbound scenarios ("are you a robot?", "mission
+ * creep") aren't covered — they need Perrie to place the call, which has no
+ * webhook trigger wired yet, so Bluejay can't initiate them.
+ */
+export const GUARDRAIL_SIMULATION_ID = "34513";
+
 export async function withBluejay<T>(fn: (client: Client) => Promise<T>, timeoutMs = 15_000): Promise<T> {
   const cfg = env.bluejay();
   if (!cfg) throw new Error("BLUEJAY_API_KEY is not set.");
@@ -59,6 +70,40 @@ export async function listBluejayTools(): Promise<{ tools: BluejayTool[]; server
     const v = c.getServerVersion();
     return { tools, server: v ? `${v.name} ${v.version}` : null };
   });
+}
+
+export type BluejaySnapshot = { tool: BluejayTool; data: unknown; isError: boolean; error: string | null };
+
+/**
+ * Voice QA dashboard load: list tools AND call the handful of read-only
+ * snapshot tools, all over ONE Bluejay connection instead of one per call —
+ * opening 7 separate MCP sessions per page view was timing out under load.
+ */
+export async function loadBluejaySnapshot(
+  maxSnapshots = 6,
+): Promise<{ tools: BluejayTool[]; server: string | null; snapshots: BluejaySnapshot[] }> {
+  return withBluejay(async (c) => {
+    const tools: BluejayTool[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await c.listTools(cursor ? { cursor } : undefined);
+      tools.push(...(page.tools as BluejayTool[]));
+      cursor = page.nextCursor;
+    } while (cursor && tools.length < 500);
+    const v = c.getServerVersion();
+    const snapshotTools = tools.filter(isSnapshotTool).slice(0, maxSnapshots);
+    const snapshots = await Promise.all(
+      snapshotTools.map(async (t): Promise<BluejaySnapshot> => {
+        try {
+          const { data, isError } = readToolResult(await c.callTool({ name: t.name, arguments: {} }));
+          return { tool: t, data, isError, error: null };
+        } catch (err) {
+          return { tool: t, data: null, isError: true, error: (err as Error).message };
+        }
+      }),
+    );
+    return { tools, server: v ? `${v.name} ${v.version}` : null, snapshots };
+  }, 20_000);
 }
 
 /** Text content of a tool result, parsed as JSON when possible. */

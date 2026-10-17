@@ -9,7 +9,7 @@ const ID = "perrie";
 
 const messageInput = z.object({
   caller_name: z.string().min(1).max(120).describe("The caller's name as they said it."),
-  callback_number: z.string().max(30).optional().describe("Only if the caller gave one."),
+  callback_number: z.string().max(30).nullable().optional().describe("Only if the caller gave one."),
   message: z.string().min(1).max(2000).describe("The message, in the caller's words (lightly cleaned up)."),
   urgency: z.enum(["low", "normal", "high"]).default("normal"),
 });
@@ -23,6 +23,7 @@ const takeMessage: ToolDef = {
   sideEffect: false,
   async run(input: z.infer<typeof messageInput>, ctx) {
     const m = await db().insert("messages", {
+      user_id: ctx.userId,
       call_id: ctx.callId ?? null,
       from_name: input.caller_name,
       from_number: input.callback_number ?? ctx.caller?.number ?? null,
@@ -41,8 +42,8 @@ const listMessagesTool: ToolDef = {
   input: z.object({ unread_only: z.boolean().default(true) }),
   roles: ["owner"],
   sideEffect: false,
-  async run(input: { unread_only: boolean }) {
-    const all = await listMessages(20);
+  async run(input: { unread_only: boolean }, ctx) {
+    const all = await listMessages(ctx.userId, 20);
     const msgs = input.unread_only ? all.filter((m) => !m.read) : all;
     return {
       count: msgs.length,
@@ -72,6 +73,7 @@ const createTask: ToolDef = {
   async run(input: z.infer<typeof createTaskInput>, ctx) {
     const { createTask: create } = await import("../orchestrator/planner");
     const { task, steps } = await create({
+      userId: ctx.userId,
       request: input.request,
       source: ctx.callId ? "voice" : "playground",
       originCallId: ctx.callId ?? null,
@@ -97,9 +99,9 @@ const approveTask: ToolDef = {
   roles: ["owner"],
   sideEffect: true,
   describe: () => "start the task we just planned",
-  async run(input: { task_id: string }) {
+  async run(input: { task_id: string }, ctx) {
     const { approveTask: approve } = await import("../orchestrator/executor");
-    const task = await approve(input.task_id);
+    const task = await approve(ctx.userId, input.task_id);
     return { task_id: task.id, status: task.status };
   },
 };
@@ -111,8 +113,8 @@ const recentTasks: ToolDef = {
   input: z.object({}),
   roles: ["owner"],
   sideEffect: false,
-  async run() {
-    const tasks = await listTasks(8);
+  async run(_input: unknown, ctx) {
+    const tasks = await listTasks(ctx.userId, 8);
     return {
       tasks: tasks.map((t) => ({
         title: t.title,
@@ -172,17 +174,17 @@ export const deepgram: IntegrationDef = {
   tools: [],
 };
 
-export const anthropic: IntegrationDef = {
-  id: "anthropic",
-  name: "Claude",
+export const groq: IntegrationDef = {
+  id: "groq",
+  name: "Groq",
   category: "intelligence",
   description: "The reasoning behind conversations, task plans and call summaries.",
   accent: "amber",
   icon: "brain",
-  connect: { kind: "env", vars: ["ANTHROPIC_API_KEY"] },
+  connect: { kind: "env", vars: ["GROQ_API_KEY"] },
   async status() {
-    const a = env.anthropic();
-    return envStatus(!!a, a ? `${a.voiceModel} / ${a.plannerModel}` : null, "Add ANTHROPIC_API_KEY.");
+    const g = env.groq();
+    return envStatus(!!g, g ? `${g.voiceModel} / ${g.plannerModel}` : null, "Add GROQ_API_KEY.");
   },
   tools: [],
 };

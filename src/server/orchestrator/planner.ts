@@ -92,8 +92,12 @@ function validate(plan: Plan, tools: AnyTool[]): string[] {
   return errors;
 }
 
-async function plannerPrompt(): Promise<{ system: string; tools: AnyTool[] }> {
-  const [profile, facts, tools] = await Promise.all([getProfile(), listFacts(), availableTools("system")]);
+async function plannerPrompt(userId: string): Promise<{ system: string; tools: AnyTool[] }> {
+  const [profile, facts, tools] = await Promise.all([
+    getProfile(userId),
+    listFacts(userId),
+    availableTools(userId, "system"),
+  ]);
   const tz = profile?.timezone ?? "UTC";
   const name = ownerName(profile);
   const system = [
@@ -105,10 +109,20 @@ async function plannerPrompt(): Promise<{ system: string; tools: AnyTool[] }> {
     `Rules:`,
     `- One tool per step, exact tool names. Prefer 1–4 steps; never add actions the owner didn't ask for.`,
     `- Never invent phone numbers, e-mails, times or facts. If a number is needed and not in the request or the facts below, look it up with contacts_search first (if available); otherwise ask for clarification.`,
-    `- Calls on the owner's behalf: the step description is the mission — say exactly what to achieve, what may be agreed (e.g. acceptable time windows), and what must not be shared.`,
+    `- Only look up, contact, email or invite a person when the owner's request actually requires reaching them (a call, a text, an email, an explicit "invite them" / "loop them in"). A person's name appearing in an event title or description is NOT, by itself, a request to find their contact info or add them as an attendee — don't add a contacts_search step or attendee_emails unless the owner asked for that person to be contacted or included.`,
+    `- Calls on the owner's behalf: the step description is the mission — say exactly what to achieve, what may be agreed (e.g. acceptable time windows), and what must not be shared. Write it as a priority-ordered list of separate things to cover, not one run-on sentence — the agent covers them one at a time in conversation, not as a script read aloud.`,
     `- To book something agreed on a call, add a calendar step after the call that depends on it.`,
     `- If the request is ambiguous, unsafe, or impossible with these tools, set needs_clarification and return no steps.`,
     profile?.rules.length ? `- The owner's standing rules (always respect):\n${profile.rules.map((r) => `  • ${r}`).join("\n")}` : "",
+    ``,
+    `Example — request: "call Sam, see if he's around for lunch tomorrow, and remind him to bring my charger back":`,
+    `  Step 1 — tool: phone_call, title: "Call Sam", description: "Mission: 1) Ask if Sam is free for lunch tomorrow; if he gives a vague time, pin down one specific time. 2) Remind him to bring back the charger. Nothing else may be agreed to or shared."`,
+    `  Step 2 — tool: calendar_create_event, depends_on: [1], title: "Book lunch with Sam", description: "Create the event at the exact time agreed in step 1's result; skip this step if no time was agreed."`,
+    `  (Two short, separate things for the call to cover in order — not "ask if he's free, what time, and remind him about the charger" crammed into one sentence.)`,
+    ``,
+    `Example — request: "book a calendar time tomorrow at 3pm for the meeting with Bradford Allen":`,
+    `  Step 1 — tool: calendar_create_event, title: "Book meeting with Bradford Allen", description: "Create an event titled 'Meeting with Bradford Allen' tomorrow 3:00–4:00 PM. No attendees — the owner didn't ask to invite or notify him."`,
+    `  (ONE step. Bradford Allen's name is just the event title — it is not a request to search contacts, e-mail him, or add him as an attendee. Don't add a contacts_search step here.)`,
     ``,
     `Owner facts (may be used to plan):`,
     facts.length ? facts.map((f) => `- ${f.label}: ${f.value}`).join("\n") : "- (none)",
@@ -123,11 +137,13 @@ async function plannerPrompt(): Promise<{ system: string; tools: AnyTool[] }> {
 
 /** Create a task and plan it. Never throws for planning problems: the task records them. */
 export async function createTask(opts: {
+  userId: string;
   request: string;
   source: TaskRecord["source"];
   originCallId?: string | null;
 }): Promise<{ task: TaskRecord; steps: TaskStep[] }> {
   const task = await db().insert("tasks", {
+    user_id: opts.userId,
     title: opts.request.slice(0, 80),
     request: opts.request,
     source: opts.source,
@@ -138,12 +154,12 @@ export async function createTask(opts: {
     origin_call_id: opts.originCallId ?? null,
     completed_at: null,
   });
-  return planTask(task);
+  return planTask(opts.userId, task);
 }
 
-export async function planTask(task: TaskRecord): Promise<{ task: TaskRecord; steps: TaskStep[] }> {
+export async function planTask(userId: string, task: TaskRecord): Promise<{ task: TaskRecord; steps: TaskStep[] }> {
   try {
-    const { system, tools } = await plannerPrompt();
+    const { system, tools } = await plannerPrompt(userId);
     let feedback = "";
     let plan: Plan | null = null;
     for (let attempt = 0; attempt < 2 && !plan; attempt++) {
@@ -159,6 +175,7 @@ export async function planTask(task: TaskRecord): Promise<{ task: TaskRecord; st
       else {
         feedback = `\n\nYour previous plan was rejected:\n${errors.join("\n")}\nFix it.`;
         await logGuardrail({
+          userId,
           kind: "plan_rejected",
           severity: "warn",
           detail: `Planner output rejected: ${errors.join("; ")}`,
@@ -182,6 +199,7 @@ export async function planTask(task: TaskRecord): Promise<{ task: TaskRecord; st
     for (const [i, s] of plan.steps.entries()) {
       steps.push(
         await db().insert("task_steps", {
+          user_id: userId,
           task_id: task.id,
           position: i + 1,
           title: s.title,
