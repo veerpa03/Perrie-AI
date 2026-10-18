@@ -21,6 +21,15 @@ const nunito = Nunito({
   display: "swap",
 });
 
+// ClerkProvider wraps the entire tree and depends on live Clerk auth state
+// (the sign-in button reflects whether the visitor is signed in), so this
+// can't be statically prerendered at build time -- the Docker build stage
+// doesn't have the same runtime secrets as the deployed container, and a
+// static shell baked from a broken build-time Clerk init would get served
+// to every visitor from then on (this happened in production: empty
+// <title>, no rendered content, every single request).
+export const dynamic = "force-dynamic";
+
 const title = "Perrie — A little help. All around you.";
 const description = "Meet Perrie, your personal AI assistant. Tell it what you need, and keep your day moving.";
 
