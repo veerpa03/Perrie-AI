@@ -15,6 +15,14 @@ RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time, not
+# read at runtime — Railway's service variables are only visible to the
+# running container, not to `docker build`, so this must be re-declared as
+# a build ARG and forwarded into ENV for `pnpm build` to pick it up. Railway
+# auto-passes all service variables as build args to Dockerfile builds; it
+# just needs a matching ARG here to actually use one.
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 RUN pnpm build
 
 # The runtime image keeps the full node_modules (tsx/typescript are
