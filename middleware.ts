@@ -38,12 +38,12 @@ function buildCsp(nonce: string) {
   // defense-in-depth on any inline scripts, not as the sole trust anchor.
   return [
     `default-src 'self'`,
-    `script-src 'self' 'nonce-${nonce}' https://*.clerk.accounts.dev https://*.clerk.com${devEval}`,
+    `script-src 'self' 'nonce-${nonce}' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.perrie.site${devEval}`,
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' blob: data: https://img.clerk.com https://*.googleusercontent.com`,
     `font-src 'self' data:`,
-    `connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com wss://*.clerk.accounts.dev https://api.getbluejay.ai`,
-    `frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://accounts.google.com`,
+    `connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.perrie.site wss://*.clerk.accounts.dev wss://clerk.perrie.site https://api.getbluejay.ai`,
+    `frame-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk.perrie.site https://accounts.google.com`,
     `worker-src 'self' blob:`,
     `object-src 'none'`,
     `base-uri 'self'`,
