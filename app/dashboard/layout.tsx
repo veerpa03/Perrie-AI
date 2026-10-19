@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { ArrowLeft, Database, HardDrive } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import DashboardNav from "@/components/dashboard/DashboardNav";
-import { db } from "@/server/db";
 
 export const metadata = {
   title: "Dashboard — Perrie",
@@ -9,21 +8,6 @@ export const metadata = {
 
 // Always render with fresh data (calls and tasks change while you watch).
 export const dynamic = "force-dynamic";
-
-function StorageBadge() {
-  const kind = db().kind;
-  const Icon = kind === "supabase" ? Database : HardDrive;
-  return (
-    <p
-      className="flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold text-[color:var(--color-slate)]/65"
-      style={{ background: "rgba(255,255,255,0.55)" }}
-      title={kind === "supabase" ? "Data is stored in Supabase" : "Supabase isn't configured: data is kept in .perrie/ on this machine"}
-    >
-      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-      {kind === "supabase" ? "Supabase connected" : "Local dev storage"}
-    </p>
-  );
-}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -41,7 +25,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </Link>
           <DashboardNav orientation="vertical" />
           <div className="mt-auto space-y-2 px-1">
-            <StorageBadge />
             <Link
               href="/"
               className="focus-ring flex items-center gap-2 rounded-2xl px-3 py-2 text-sm font-bold text-[color:var(--color-slate)]/60 hover:text-[color:var(--color-slate)]"
@@ -59,7 +42,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link href="/" className="focus-ring rounded-xl font-display text-3xl">
                 <span className="accent-text">Perrie</span>
               </Link>
-              <StorageBadge />
             </div>
             <DashboardNav orientation="horizontal" />
           </div>

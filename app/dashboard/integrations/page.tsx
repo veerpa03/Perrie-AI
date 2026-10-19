@@ -6,26 +6,14 @@ import { integrationIcon } from "@/components/dashboard/integrationIcons";
 import { ACCENTS, ClayCard, IconBubble, PageHeader, Pill, SoftButton } from "@/components/dashboard/ui";
 import { env } from "@/server/env";
 import { INTEGRATIONS, integrationStatuses } from "@/server/integrations/registry";
-import type { AgentRole } from "@/server/integrations/types";
 
 export const metadata = { title: "Integrations — Perrie" };
-
-const ROLE_LABEL: Record<AgentRole, string> = {
-  owner: "you",
-  system: "tasks",
-  delegate: "calls for you",
-  guest: "callers",
-};
 
 const CATEGORY_LABEL: Record<string, string> = {
   core: "Built in",
   telephony: "Phone",
   calendar: "Calendar",
   contacts: "Contacts",
-  voice: "Voice",
-  intelligence: "Intelligence",
-  storage: "Storage",
-  quality: "Quality",
 };
 
 export default async function IntegrationsPage({
@@ -97,21 +85,6 @@ export default async function IntegrationsPage({
               {st?.label && <p className="mt-2 truncate text-sm font-bold text-[color:var(--color-slate)]/80">{st.label}</p>}
               {!st?.connected && st?.hint && <p className="mt-2 text-xs text-[color:var(--color-slate)]/75">{st.hint}</p>}
 
-              {i.tools.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-xs font-bold uppercase tracking-wider text-[color:var(--color-slate)]/75">Tools</p>
-                  <ul className="mt-2 space-y-1.5">
-                    {i.tools.map((t) => (
-                      <li key={t.name} className="text-xs text-[color:var(--color-slate)]/70">
-                        <code className="font-bold text-[color:var(--color-slate)]">{t.name}</code>
-                        <span className="ml-1.5">for {t.roles.map((r) => ROLE_LABEL[r]).join(", ")}</span>
-                        {t.sideEffect && <span className="ml-1.5 font-bold text-[#B5403A]">· asks first</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
               <div className="mt-auto pt-5">
                 {i.connect.kind === "oauth" &&
                   (st?.connected || st?.error ? (
@@ -134,7 +107,7 @@ export default async function IntegrationsPage({
                     </a>
                   ) : (
                     <p className="flex items-center gap-1.5 text-xs font-semibold text-[color:var(--color-slate)]/75">
-                      <X className="h-3.5 w-3.5" aria-hidden="true" /> Add GOOGLE_CLIENT_ID / SECRET first
+                      <X className="h-3.5 w-3.5" aria-hidden="true" /> Google sign-in isn&apos;t available yet
                     </p>
                   ))}
 

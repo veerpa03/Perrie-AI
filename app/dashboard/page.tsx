@@ -44,7 +44,6 @@ import {
   listTasks,
   ownerName,
 } from "@/server/db";
-import { serviceStatus } from "@/server/env";
 import { INTEGRATIONS, integrationStatuses } from "@/server/integrations/registry";
 import { prettyPhone } from "@/server/phone";
 
@@ -99,27 +98,28 @@ export default async function OverviewPage() {
     }),
   );
 
-  const svc = serviceStatus();
+  // Only steps the signed-in owner can actually do something about. Platform
+  // infrastructure (which LLM/voice/storage vendor powers Perrie under the
+  // hood) is configured once by whoever runs this deployment, not per-owner
+  // -- showing vendor names and env var hints here would be confusing and
+  // meaningless to someone just using the product, so it's deliberately left
+  // off.
   const checklist: { label: string; done: boolean; hint: string; href?: string }[] = [
     { label: "Create your profile", done: !!profile, hint: "Who Perrie works for", href: "/dashboard/profile" },
     { label: "Set your owner PIN", done: !!profile?.pin_hash, hint: "Unlocks owner mode on calls", href: "/dashboard/profile" },
     { label: "Add facts about you", done: facts.length > 0, hint: "What Perrie may answer", href: "/dashboard/profile" },
-    { label: "Groq (GROQ_API_KEY)", done: svc.groq, hint: "Conversations + planning" },
     {
-      label: "Your Twilio number",
+      label: "Connect your phone number",
       done: !!statuses.get("twilio")?.connected,
-      hint: "Connect your own Twilio account on Integrations",
+      hint: "So Perrie can answer your calls",
       href: "/dashboard/integrations",
     },
-    { label: "Deepgram voice", done: svc.deepgram, hint: "DEEPGRAM_API_KEY" },
-    { label: "Supabase database", done: svc.supabase, hint: "Otherwise local dev storage" },
     {
-      label: "Google Calendar & Contacts",
+      label: "Connect Google Calendar & Contacts",
       done: !!statuses.get("google_calendar")?.connected && !!statuses.get("google_contacts")?.connected,
-      hint: "Connect on Integrations",
+      hint: "So Perrie can check your schedule and recognize callers",
       href: "/dashboard/integrations",
     },
-    { label: "Bluejay testing", done: svc.bluejay, hint: "BLUEJAY_API_KEY", href: "/dashboard/voice-qa" },
   ];
   const doneCount = checklist.filter((c) => c.done).length;
 
@@ -383,9 +383,6 @@ export default async function OverviewPage() {
                 );
               })}
             </ul>
-            <p className="mt-3 text-xs text-[color:var(--color-slate)]/75">
-              Keys go in <code className="font-bold">.env.local</code> — see <code className="font-bold">.env.example</code>.
-            </p>
           </ClayCard>
 
           <ClayCard
@@ -399,7 +396,7 @@ export default async function OverviewPage() {
             }
           >
             <ul className="grid grid-cols-2 gap-2.5">
-              {INTEGRATIONS.map((i) => {
+              {INTEGRATIONS.filter((i) => i.connect.kind !== "env").map((i) => {
                 const st = statuses.get(i.id);
                 const Icon = integrationIcon(i.icon);
                 const a = ACCENTS[i.accent];
