@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { Check, KeyRound, LogIn, LogOut, X } from "lucide-react";
+import { Check, LogIn, LogOut, X } from "lucide-react";
 import { disconnectIntegrationAction } from "@/actions/integrations";
 import CredentialsForm from "@/components/dashboard/CredentialsForm";
 import { integrationIcon } from "@/components/dashboard/integrationIcons";
@@ -38,6 +38,13 @@ export default async function IntegrationsPage({
   const sp = await searchParams;
   const statuses = await integrationStatuses(userId, true);
   const googleReady = !!env.google();
+  // "env"-connect integrations (Deepgram, Groq, Supabase, Bluejay) are
+  // platform infrastructure configured once by the deployer, not something
+  // any individual tenant connects -- showing their vendor names and
+  // "API_KEY is set" badges to every signed-up user leaks backend/vendor
+  // details for integrations they have no control over. Only show what a
+  // tenant can actually connect themselves (plus the always-on built-in).
+  const visibleIntegrations = INTEGRATIONS.filter((i) => i.connect.kind !== "env");
 
   return (
     <>
@@ -61,7 +68,7 @@ export default async function IntegrationsPage({
       )}
 
       <div className="grid gap-6 md:grid-cols-2 2xl:grid-cols-3">
-        {INTEGRATIONS.map((i) => {
+        {visibleIntegrations.map((i) => {
           const st = statuses.get(i.id);
           const Icon = integrationIcon(i.icon);
           return (
@@ -89,26 +96,6 @@ export default async function IntegrationsPage({
               <p className="mt-4 text-sm leading-relaxed text-[color:var(--color-slate)]/70">{i.description}</p>
               {st?.label && <p className="mt-2 truncate text-sm font-bold text-[color:var(--color-slate)]/80">{st.label}</p>}
               {!st?.connected && st?.hint && <p className="mt-2 text-xs text-[color:var(--color-slate)]/75">{st.hint}</p>}
-
-              {i.connect.kind === "env" && (
-                <ul className="mt-4 flex flex-wrap gap-1.5" aria-label="Environment variables">
-                  {i.connect.vars.map((v) => {
-                    const set = !!process.env[v]?.trim();
-                    return (
-                      <li key={v}>
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] font-semibold"
-                          style={{ background: set ? ACCENTS.mint.soft : "#F1EDE6", color: set ? ACCENTS.mint.ink : "#7A8796" }}
-                        >
-                          {set ? <Check className="h-3 w-3" aria-hidden="true" /> : <KeyRound className="h-3 w-3" aria-hidden="true" />}
-                          {v}
-                          <span className="sr-only">{set ? " is set" : " is missing"}</span>
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
 
               {i.tools.length > 0 && (
                 <div className="mt-4">
